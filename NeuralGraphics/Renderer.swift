@@ -43,6 +43,8 @@ class Renderer : NSObject, MetalViewDelegate {
             device.makeCommandAllocator()!
         }
         self.frameCompletionEvent = device.makeSharedEvent()!
+        
+        RendererData.initialize(device: self.device, cmdQueue: self.commandQueue, residencySet: self.residencySet)
     }
     
     func configure(_ view: MTKView) {
