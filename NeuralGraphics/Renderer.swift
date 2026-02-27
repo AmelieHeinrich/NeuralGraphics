@@ -16,7 +16,9 @@ protocol MetalViewDelegate : MTKViewDelegate {
 class Renderer : NSObject, MetalViewDelegate {
     let device: MTLDevice
     let maxFramesInFlight: UInt64 = 3
-    
+
+    let camera: Camera = Camera()
+
     private let commandQueue: MTL4CommandQueue
     private let residencySet: MTLResidencySet
     private let compiler: MTL4Compiler
@@ -25,9 +27,7 @@ class Renderer : NSObject, MetalViewDelegate {
     private let resourceManager: ResourceManager
     private let indexBuffer: Buffer
     private let texture: MTLTexture
-    private let nn: NeuralNetwork
-    private let inputTensor: Tensor
-    private let outputTensor: Tensor
+    private var lastFrameTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
     
     init(device: MTLDevice) {
         self.device = device
@@ -49,10 +49,10 @@ class Renderer : NSObject, MetalViewDelegate {
         self.compiler = try! device.makeCompiler(descriptor: compilerDescriptor)
         
         RendererData.initialize(device: self.device, cmdQueue: self.commandQueue, residencySet: self.residencySet, compiler: self.compiler)
-        self.commandBuffers = (0..<maxFramesInFlight).map { _ in
+        self.commandBuffers = (0..<maxFramesInFlight).map { i in
             {
                 let cmdBuffer = CommandBuffer()
-                cmdBuffer.setName(name: "Command Buffer")
+                cmdBuffer.setName(name: "Command Buffer " + String(i))
                 return cmdBuffer
             }()
         }
@@ -71,14 +71,6 @@ class Renderer : NSObject, MetalViewDelegate {
         
         self.texture = try! self.resourceManager.texture(url: Bundle.main.url(forResource: "TestTexture", withExtension: "png")!, sRGB: true)
         self.texture.label = "TestTexture.png"
-        
-        self.nn = NeuralNetwork(path: Bundle.main.url(forResource: "2_input_neural_brdf", withExtension: ".mtlpackage")!, name: "2 Input Neural BRDF")
-        
-        self.inputTensor = Tensor(dimensions: [2, 1])
-        self.inputTensor.setName(name: "Input Tensor")
-        
-        self.outputTensor = Tensor(dimensions: [3, 1])
-        self.outputTensor.setName(name: "Output Tensor")
     }
     
     func configure(_ view: MTKView) {
@@ -89,9 +81,18 @@ class Renderer : NSObject, MetalViewDelegate {
         view.delegate = self
     }
     
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
+    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
+        camera.resize(width: Float(size.width), height: Float(size.height))
+    }
     
     func draw(in view: MTKView) {
+        let now = CFAbsoluteTimeGetCurrent()
+        let dt  = Float(now - lastFrameTime)
+        lastFrameTime = now
+
+        Input.shared.beginFrame()
+        camera.update(dt: dt)
+
         let frameIndex = Int(RendererData.gpuTimeline.currentValue % maxFramesInFlight)
         let cmdBuffer = commandBuffers[frameIndex]
         RendererData.gpuTimeline.wait(value: cmdBuffer.lastSignaledValue)
@@ -103,13 +104,6 @@ class Renderer : NSObject, MetalViewDelegate {
         renderPassDescriptor.name = "Draw Quads"
 
         cmdBuffer.begin()
-        
-        let mlPass = cmdBuffer.beginMLPass(name: "Infer BRDF")
-        mlPass.setNeuralNetwork(nn: self.nn)
-        mlPass.setTensor(tensor: inputTensor, index: 0)
-        mlPass.setTensor(tensor: outputTensor, index: 1)
-        mlPass.infer()
-        mlPass.end()
 
         let renderPass = cmdBuffer.beginRenderPass(descriptor: renderPassDescriptor)
         renderPass.setPipeline(pipeline: self.renderPipeline)

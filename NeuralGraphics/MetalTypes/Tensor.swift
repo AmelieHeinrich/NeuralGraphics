@@ -10,12 +10,7 @@ import Metal
 class Tensor {
     var tensor: MTLTensor
     
-    init(dimensions: [Int]) {
-        let descriptor = MTLTensorDescriptor()
-        descriptor.dataType = .float16
-        descriptor.dimensions = MTLTensorExtents(dimensions)!
-        descriptor.usage = [.machineLearning, .compute, .render]
-        
+    init(descriptor: MTLTensorDescriptor) {
         self.tensor = try! RendererData.device.makeTensor(descriptor: descriptor)
         RendererData.residencySet.addAllocation(self.tensor)
     }

@@ -14,23 +14,24 @@ struct VSOut {
 };
 
 [[vertex]]
-VSOut triangle_vs(uint id [[vertex_id]]) {
+VSOut triangle_vs(uint id [[vertex_id]],
+                  const device float4x4& camera [[buffer(0)]]) {
     float3 positions[] = {
         float3( 0.5f,  0.5f, 0.0f),
         float3( 0.5f, -0.5f, 0.0f),
         float3(-0.5f, -0.5f, 0.0f),
         float3(-0.5f,  0.5f, 0.0f)
     };
-    
+
     float2 uvs[] = {
         float2(1.0f, 1.0f),
         float2(1.0f, 0.0f),
         float2(0.0f, 0.0f),
         float2(0.0f, 1.0f)
     };
-    
+
     VSOut out;
-    out.Position = float4(positions[id], 1.0f);
+    out.Position = camera * float4(positions[id], 1.0f);
     out.UV = uvs[id];
     return out;
 }
@@ -45,6 +46,6 @@ float4 triangle_fs(VSOut in [[stage_in]],
         address::repeat,
         lod_clamp(0.0f, MAXFLOAT)
     );
-    
+
     return albedo.sample(textureSampler, in.UV);
 }

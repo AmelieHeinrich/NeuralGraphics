@@ -27,8 +27,9 @@ class MLPass {
         encoder.setPipelineState(nn.pipeline)
     }
     
-    func setTensor(tensor: Tensor, index: Int) {
-        RendererData.mlTable.setResource(tensor.getAddress(), bufferIndex: index)
+    func setTensors(tensors: [Tensor]) {
+        RendererData.mlTable.setResource(tensors[0].getAddress(), bufferIndex: 0)
+        RendererData.mlTable.setResource(tensors[1].getAddress(), bufferIndex: 1)
     }
     
     func infer() {
