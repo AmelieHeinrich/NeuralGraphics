@@ -105,21 +105,21 @@ class RenderPass {
         }
     }
     
-    func setBuffer(buf: Buffer, index: Int, stages: MTLRenderStages, offset: UInt64 = 0) {
+    func setBuffer(buf: Buffer, index: Int, stages: MTLRenderStages, offset: Int = 0) {
         if stages.contains(.vertex) {
-            RendererData.vertexTable.setAddress(buf.getAddress() + offset, index: index)
+            RendererData.vertexTable.setAddress(buf.getAddress() + UInt64(offset), index: index)
         }
         if stages.contains(.fragment) {
-            RendererData.fragmentTable.setAddress(buf.getAddress() + offset, index: index)
+            RendererData.fragmentTable.setAddress(buf.getAddress() + UInt64(offset), index: index)
         }
     }
     
-    func setBuffer(buf: MTLBuffer, index: Int, stages: MTLRenderStages, offset: UInt64 = 0) {
+    func setBuffer(buf: MTLBuffer, index: Int, stages: MTLRenderStages, offset: Int = 0) {
         if stages.contains(.vertex) {
-            RendererData.vertexTable.setAddress(buf.gpuAddress + offset, index: index)
+            RendererData.vertexTable.setAddress(buf.gpuAddress + UInt64(offset), index: index)
         }
         if stages.contains(.fragment) {
-            RendererData.fragmentTable.setAddress(buf.gpuAddress + offset, index: index)
+            RendererData.fragmentTable.setAddress(buf.gpuAddress + UInt64(offset), index: index)
         }
     }
     

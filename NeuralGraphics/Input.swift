@@ -16,7 +16,6 @@ class Input {
 
     private(set) var mouseDelta: SIMD2<Float> = .zero
     private(set) var mousePosition: SIMD2<Float> = .zero
-    private var lastMousePosition: SIMD2<Float>? = nil
 
     private(set) var leftMouseDown: Bool = false
     private(set) var rightMouseDown: Bool = false
@@ -57,22 +56,26 @@ class Input {
 
     func mouseMoved(event: NSEvent, in view: NSView) {
         let location = view.convert(event.locationInWindow, from: nil)
-        let current = SIMD2<Float>(Float(location.x), Float(location.y))
-        if let last = lastMousePosition {
-            mouseDelta = current - last
-        }
-        lastMousePosition = current
-        mousePosition = current
+        mousePosition = SIMD2<Float>(Float(location.x), Float(location.y))
+        // Accumulate raw deltas — these are valid for both mouseMoved and drag events
+        mouseDelta.x += Float(event.deltaX)
+        mouseDelta.y += Float(event.deltaY)
     }
 
     func mouseDown(event: NSEvent) {
         if event.type == .leftMouseDown  { leftMouseDown = true }
-        if event.type == .rightMouseDown { rightMouseDown = true }
+        if event.type == .rightMouseDown {
+            rightMouseDown = true
+            CGDisplayHideCursor(CGMainDisplayID())
+        }
     }
 
     func mouseUp(event: NSEvent) {
         if event.type == .leftMouseUp  { leftMouseDown = false }
-        if event.type == .rightMouseUp { rightMouseDown = false }
+        if event.type == .rightMouseUp {
+            rightMouseDown = false
+            CGDisplayShowCursor(CGMainDisplayID())
+        }
     }
 }
 

@@ -41,7 +41,7 @@ class Buffer {
         return self.buffer.contents()
     }
     
-    func write(bytes: UnsafeRawPointer, size: Int) {
-        memcpy(self.contents(), bytes, size)
+    func write(bytes: UnsafeRawPointer, size: Int, offset: Int = 0) {
+        memcpy(self.contents() + offset, bytes, size)
     }
 }
