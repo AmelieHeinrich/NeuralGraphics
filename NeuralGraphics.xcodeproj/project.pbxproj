@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BA02D9952F557EB1009EBF35 /* libate.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = BA02D9942F557EB0009EBF35 /* libate.tbd */; };
 		BA02D9F32F558F09009EBF35 /* 8006627369776289000.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02D9CF2F558F09009EBF35 /* 8006627369776289000.tex */; };
 		BA02D9F42F558F09009EBF35 /* 3628158980083700836.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02D9BA2F558F09009EBF35 /* 3628158980083700836.tex */; };
 		BA02D9F52F558F09009EBF35 /* 7815564343179553343.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02D9CE2F558F09009EBF35 /* 7815564343179553343.tex */; };
@@ -81,6 +80,13 @@
 		BA02DA3D2F559466009EBF35 /* Cube.bin in Resources */ = {isa = PBXBuildFile; fileRef = BA02DA392F559466009EBF35 /* Cube.bin */; };
 		BA02DA3E2F559466009EBF35 /* Cube_MetallicRoughness.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02DA3B2F559466009EBF35 /* Cube_MetallicRoughness.tex */; };
 		BA02DA3F2F559466009EBF35 /* Cube_BaseColor.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02DA3A2F559466009EBF35 /* Cube_BaseColor.tex */; };
+		BA5E5EF42F563D2700287E35 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA5E5EF32F563D2700287E35 /* Accelerate.framework */; };
+		BA5E5EF62F563DCC00287E35 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA5E5EF52F563DCC00287E35 /* Foundation.framework */; };
+		BA5E5EF82F563DCF00287E35 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA5E5EF72F563DCF00287E35 /* Metal.framework */; };
+		BA5E5EFA2F563E4C00287E35 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA5E5EF92F563E4C00287E35 /* QuartzCore.framework */; };
+		BA5E5EFC2F563E7600287E35 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA5E5EFB2F563E7600287E35 /* CoreGraphics.framework */; };
+		BA5E5EFF2F563EB000287E35 /* ImageIO.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA5E5EFD2F563EB000287E35 /* ImageIO.framework */; };
+		BA5E5F002F563EB000287E35 /* CoreImage.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BA5E5EFE2F563EB000287E35 /* CoreImage.framework */; };
 		BA82AC612F55C5D60052AFC5 /* MASTER_Wood_Painted3_Normal.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA82ABC02F55C5D50052AFC5 /* MASTER_Wood_Painted3_Normal.tex */; };
 		BA82AC622F55C5D60052AFC5 /* Balcony_Ornaments_Normal.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA82AAE62F55C5D50052AFC5 /* Balcony_Ornaments_Normal.tex */; };
 		BA82AC632F55C5D60052AFC5 /* MASTER_Grain_Metal_Specular.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA82AB912F55C5D50052AFC5 /* MASTER_Grain_Metal_Specular.tex */; };
@@ -660,6 +666,13 @@
 		BA02DA392F559466009EBF35 /* Cube.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = Cube.bin; sourceTree = "<group>"; };
 		BA02DA3A2F559466009EBF35 /* Cube_BaseColor.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = Cube_BaseColor.tex; sourceTree = "<group>"; };
 		BA02DA3B2F559466009EBF35 /* Cube_MetallicRoughness.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = Cube_MetallicRoughness.tex; sourceTree = "<group>"; };
+		BA5E5EF32F563D2700287E35 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		BA5E5EF52F563DCC00287E35 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
+		BA5E5EF72F563DCF00287E35 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		BA5E5EF92F563E4C00287E35 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		BA5E5EFB2F563E7600287E35 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		BA5E5EFD2F563EB000287E35 /* ImageIO.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImageIO.framework; path = System/Library/Frameworks/ImageIO.framework; sourceTree = SDKROOT; };
+		BA5E5EFE2F563EB000287E35 /* CoreImage.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreImage.framework; path = System/Library/Frameworks/CoreImage.framework; sourceTree = SDKROOT; };
 		BA82AACA2F55C5D50052AFC5 /* Antenna_Metal_BaseColor.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = Antenna_Metal_BaseColor.tex; sourceTree = "<group>"; };
 		BA82AACB2F55C5D50052AFC5 /* Antenna_Metal_Normal.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = Antenna_Metal_Normal.tex; sourceTree = "<group>"; };
 		BA82AACC2F55C5D50052AFC5 /* Antenna_Metal_Specular.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = Antenna_Metal_Specular.tex; sourceTree = "<group>"; };
@@ -1170,7 +1183,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				BA02D9952F557EB1009EBF35 /* libate.tbd in Frameworks */,
+				BA5E5EFF2F563EB000287E35 /* ImageIO.framework in Frameworks */,
+				BA5E5F002F563EB000287E35 /* CoreImage.framework in Frameworks */,
+				BA5E5EFC2F563E7600287E35 /* CoreGraphics.framework in Frameworks */,
+				BA5E5EFA2F563E4C00287E35 /* QuartzCore.framework in Frameworks */,
+				BA5E5EF82F563DCF00287E35 /* Metal.framework in Frameworks */,
+				BA5E5EF62F563DCC00287E35 /* Foundation.framework in Frameworks */,
+				BA5E5EF42F563D2700287E35 /* Accelerate.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1187,6 +1206,13 @@
 		BA02D9932F557EB0009EBF35 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				BA5E5EFE2F563EB000287E35 /* CoreImage.framework */,
+				BA5E5EFD2F563EB000287E35 /* ImageIO.framework */,
+				BA5E5EFB2F563E7600287E35 /* CoreGraphics.framework */,
+				BA5E5EF92F563E4C00287E35 /* QuartzCore.framework */,
+				BA5E5EF72F563DCF00287E35 /* Metal.framework */,
+				BA5E5EF52F563DCC00287E35 /* Foundation.framework */,
+				BA5E5EF32F563D2700287E35 /* Accelerate.framework */,
 				BA02D9942F557EB0009EBF35 /* libate.tbd */,
 			);
 			name = Frameworks;
@@ -2515,6 +2541,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				HEADER_SEARCH_PATHS = "$(SYSTEM_DEVELOPER_USR_DIR)/include";
 				LIBRARY_SEARCH_PATHS = "$(SYSTEM_DEVELOPER_USR_DIR)/lib";
+				OTHER_LDFLAGS = "-lAppleTextureConverter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -2527,6 +2554,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				HEADER_SEARCH_PATHS = "$(SYSTEM_DEVELOPER_USR_DIR)/include";
 				LIBRARY_SEARCH_PATHS = "$(SYSTEM_DEVELOPER_USR_DIR)/lib";
+				OTHER_LDFLAGS = "-lAppleTextureConverter";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

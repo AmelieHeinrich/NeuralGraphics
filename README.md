@@ -1,7 +1,8 @@
 # Neural Graphics
 
-This repository showcases various neural graphics techniques implemented using Metal 4 ML API.
+This repository showcases various neural graphics & raytracing techniques implemented using Metal 4 ML API.
 
-## Features
+## Building and running
 
-- 2 input neural BRDF (UV)
+This project works on any Apple Silicon GPU, however M3+ is required for raytracing support.
+Just run the AssetBaker project first, then you can build and run the main project.

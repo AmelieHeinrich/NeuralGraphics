@@ -20,8 +20,8 @@ class TextureLoader {
     private static let headerSize = 16
 
     private static func astcMipSize(width: Int, height: Int) -> Int {
-        let blockW = (width  + 3) / 4
-        let blockH = (height + 3) / 4
+        let blockW = (width  + 5) / 6
+        let blockH = (height + 5) / 6
         return blockW * blockH * 16
     }
 
@@ -81,7 +81,7 @@ class TextureLoader {
         var mipH = h
 
         for mip in 0..<mips {
-            let blockW   = (mipW + 3) / 4
+            let blockW   = (mipW + 5) / 6
             let mipBytes = astcMipSize(width: mipW, height: mipH)
             let bpr      = blockW * 16  // bytes per block-row
 

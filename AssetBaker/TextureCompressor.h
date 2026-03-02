@@ -7,7 +7,6 @@
 
 #pragma once
 
-#include <AppleTextureEncoder.h>
 #include <AppleTextureConverter.h>
 #include <string>
 
@@ -20,8 +19,6 @@ struct TextureHeader
     uint32_t Width;
     uint32_t Height;
     uint32_t MipLevels;
-    
-    ATC_Compressor test;
 };
 
 void CompressTexture(const std::string& source, const std::string& out);
