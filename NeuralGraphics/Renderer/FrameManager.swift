@@ -20,35 +20,25 @@ import Metal
 //       → context.camera populated, timeline.execute(context)
 //         → pass.render(context) for each pass in order
 
-import QuartzCore
+internal import QuartzCore
 
 class FrameManager {
     private let maxFramesInFlight: UInt64 = 3
-
-    // Owned passes
-    private var passes: [Pass]
-
-    // Swappable timeline + controller
-    private var timeline:   RenderTimeline
+    private var passes: [Pass]? = nil
     private var controller: RendererController
-
-    // Frame pacing
     private let commandBuffers: [CommandBuffer]
-
-    // Shared resource blackboard — cleared at the top of every frame
     private let resources: ResourceRegistry = ResourceRegistry()
+    private let allocator: GPULinearAllocator
+    private let settings: RendererSettings
 
+    private var mobileTimeline: RenderTimeline? = nil
+    private var desktopTimeline: RenderTimeline? = nil
+    private var pathtracedTimeline: RenderTimeline? = nil
+    
     var model: Mesh?
 
-    init() {
-        // Build the forward pass and register it in the timeline
-        let forward = ForwardPass()
-        self.passes = [forward]
-
-        let timeline = RenderTimeline()
-        timeline.addPass(forward)
-        self.timeline   = timeline
-
+    init(settings: RendererSettings) {
+        self.settings = settings
         self.controller = EditorRendererController()
 
         self.commandBuffers = (0..<3).map { i in
@@ -56,6 +46,9 @@ class FrameManager {
             cb.setName(name: "Command Buffer \(i)")
             return cb
         }
+        self.allocator = GPULinearAllocator(size: 32 * 1024 * 1024)
+        
+        setupTimelines(settings: settings)
     }
 
     func setModel(_ mesh: Mesh) {
@@ -64,7 +57,7 @@ class FrameManager {
 
     func resize(width: Int, height: Int) {
         controller.resize(width: width, height: height)
-        for pass in passes {
+        for pass in passes! {
             pass.resize(width: width, height: height)
         }
     }
@@ -76,6 +69,7 @@ class FrameManager {
         let cmdBuffer  = commandBuffers[frameIndex]
         RendererData.gpuTimeline.wait(value: cmdBuffer.lastSignaledValue)
 
+        allocator.reset()
         cmdBuffer.begin()
 
         var context = FrameContext(
@@ -84,10 +78,18 @@ class FrameManager {
             drawable:   drawable,
             resources:  resources,
             model:      model,
-            frameIndex: frameIndex
+            frameIndex: frameIndex,
+            allocator: allocator
         )
 
-        controller.render(timeline: timeline, context: &context)
+        switch settings.currentTimeline {
+        case .Mobile:
+            controller.render(timeline: mobileTimeline!, context: &context)
+        case .Desktop:
+            controller.render(timeline: desktopTimeline!, context: &context)
+        case .Pathtraced:
+            controller.render(timeline: pathtracedTimeline!, context: &context)
+        }
 
         cmdBuffer.end()
 
@@ -99,5 +101,19 @@ class FrameManager {
         cmdBuffer.lastSignaledValue = RendererData.gpuTimeline.signal()
 
         Input.shared.beginFrame()
+    }
+    
+    func setupTimelines(settings: RendererSettings) {
+        // Initialize passes
+        let forward = ForwardPass()
+        let tonemap = TonemapPass(settings: settings)
+        self.passes = [forward, tonemap]
+
+        // Desktop pipeline
+        let desktopTimeline = RenderTimeline()
+        desktopTimeline.addPass(forward)
+        desktopTimeline.addPass(tonemap)
+        
+        self.desktopTimeline = desktopTimeline
     }
 }

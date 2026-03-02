@@ -124,6 +124,17 @@ class RenderPass {
         }
     }
     
+    func setBytes(allocator: GPULinearAllocator, index: Int, bytes: UnsafeRawPointer, size: Int, stages: MTLRenderStages) {
+        let offset = allocator.allocate(size: size)
+        allocator.writeData(data: bytes, offset: offset, size: size)
+        if stages.contains(.vertex) {
+            RendererData.vertexTable.setAddress(allocator.buffer.buffer.gpuAddress + UInt64(offset), index: index)
+        }
+        if stages.contains(.fragment) {
+            RendererData.fragmentTable.setAddress(allocator.buffer.buffer.gpuAddress + UInt64(offset), index: index)
+        }
+    }
+    
     func pushMarker(name: String) {
         self.encoder.pushDebugGroup(name)
     }
@@ -140,7 +151,15 @@ class RenderPass {
         self.encoder.waitForFence(RendererData.gpuTimeline.fence, beforeEncoderStages: stage)
     }
     
-    func barrier(before: MTLStages, after: MTLStages) {
+    func intraPassBarrier(before: MTLStages, after: MTLStages) {
         self.encoder.barrier(afterEncoderStages: after, beforeEncoderStages: before, visibilityOptions: .device)
+    }
+    
+    func consumerBarrier(before: MTLStages, after: MTLStages) {
+        self.encoder.barrier(afterQueueStages: after, beforeStages: before, visibilityOptions: .device)
+    }
+    
+    func producerBarrier(before: MTLStages, after: MTLStages) {
+        self.encoder.barrier(afterStages: after, beforeQueueStages: before, visibilityOptions: .device)
     }
 }

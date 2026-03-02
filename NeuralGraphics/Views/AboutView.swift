@@ -75,7 +75,3 @@ struct AboutView: View {
         .frame(minHeight: 320)
     }
 }
-
-#Preview {
-    AboutView()
-}

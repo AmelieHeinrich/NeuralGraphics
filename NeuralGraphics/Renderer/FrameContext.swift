@@ -6,7 +6,7 @@
 //
 
 import simd
-import QuartzCore
+internal import QuartzCore
 
 struct CameraData {
     var view:                  simd_float4x4
@@ -41,6 +41,7 @@ struct FrameContext {
     var resources:  ResourceRegistry
     var model:      Mesh?
     var frameIndex: Int
+    var allocator: GPULinearAllocator
 }
 
 extension Camera {

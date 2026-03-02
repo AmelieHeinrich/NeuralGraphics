@@ -44,7 +44,15 @@ class MLPass {
         self.encoder.waitForFence(RendererData.gpuTimeline.fence, beforeEncoderStages: stage)
     }
     
-    func barrier(before: MTLStages, after: MTLStages) {
+    func intraPassBarrier(before: MTLStages, after: MTLStages) {
         self.encoder.barrier(afterEncoderStages: after, beforeEncoderStages: before, visibilityOptions: .device)
+    }
+    
+    func consumerBarrier(before: MTLStages, after: MTLStages) {
+        self.encoder.barrier(afterQueueStages: after, beforeStages: before, visibilityOptions: .device)
+    }
+    
+    func producerBarrier(before: MTLStages, after: MTLStages) {
+        self.encoder.barrier(afterStages: after, beforeQueueStages: before, visibilityOptions: .device)
     }
 }

@@ -31,9 +31,19 @@ class ComputePass {
     func setTexture(texture: Texture, index: Int) {
         RendererData.computeTable.setTexture(texture.texture.gpuResourceID, index: index)
     }
+    
+    func setTexture(texture: MTLTexture, index: Int) {
+        RendererData.computeTable.setTexture(texture.gpuResourceID, index: index)
+    }
 
+    func setBytes(allocator: GPULinearAllocator, index: Int, bytes: UnsafeRawPointer, size: Int) {
+        let offset = allocator.allocate(size: size)
+        allocator.writeData(data: bytes, offset: offset, size: size)
+        RendererData.computeTable.setAddress(allocator.buffer.buffer.gpuAddress + UInt64(offset), index: index)
+    }
+    
     func dispatch(threads: MTLSize, threadsPerGroup: MTLSize) {
-        self.encoder.dispatchThreads(threadsPerGrid: threads, threadsPerThreadgroup: threadsPerGroup)
+        self.encoder.dispatchThreadgroups(threadgroupsPerGrid: threads, threadsPerThreadgroup: threadsPerGroup)
     }
 
     func pushMarker(name: String) {
@@ -52,7 +62,15 @@ class ComputePass {
         self.encoder.waitForFence(RendererData.gpuTimeline.fence, beforeEncoderStages: stage)
     }
     
-    func barrier(before: MTLStages, after: MTLStages) {
+    func intraPassBarrier(before: MTLStages, after: MTLStages) {
         self.encoder.barrier(afterEncoderStages: after, beforeEncoderStages: before, visibilityOptions: .device)
+    }
+    
+    func consumerBarrier(before: MTLStages, after: MTLStages) {
+        self.encoder.barrier(afterQueueStages: after, beforeStages: before, visibilityOptions: .device)
+    }
+    
+    func producerBarrier(before: MTLStages, after: MTLStages) {
+        self.encoder.barrier(afterStages: after, beforeQueueStages: before, visibilityOptions: .device)
     }
 }

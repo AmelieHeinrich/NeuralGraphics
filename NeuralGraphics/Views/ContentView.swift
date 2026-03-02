@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Metal
+import Combine
 
 // Shared animation used throughout — defined at file scope to avoid
 // overload-resolution ambiguity inside closures.
@@ -69,18 +70,14 @@ private struct HUDButton: View {
 
                     Image(systemName: panel.icon)
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(
-                            isActive
-                                ? panel.color
-                                : (isHovered ? panel.color : panel.color.opacity(0.65))
-                        )
+                        .foregroundStyle(panel.color)
                         .scaleEffect(isActive ? 1.1 : 1.0)
                         .animation(panelAnimation, value: isActive)
                 }
 
                 Text(panel.label)
                     .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(isActive ? panel.color : (isHovered ? .primary : .secondary))
+                    .foregroundStyle(isActive ? panel.color : .primary)
             }
             .frame(width: 60, height: 64)
             .contentShape(Rectangle())
@@ -166,13 +163,12 @@ private struct RevealButton: View {
                 Text("Menu")
                     .font(.system(size: 12, weight: .semibold))
             }
-            .foregroundStyle(isHovered ? .primary : .secondary)
+            .foregroundStyle(.primary)
             .padding(.horizontal, 18)
             .padding(.vertical, 10)
             .background(.ultraThinMaterial, in: Capsule())
             .overlay(Capsule().strokeBorder(.white.opacity(isHovered ? 0.22 : 0.10), lineWidth: 1))
             .shadow(color: .black.opacity(0.30), radius: 10, y: 4)
-            .opacity(isHovered ? 1.0 : 0.72)
             .scaleEffect(isHovered ? 1.04 : 1.0)
         }
         .buttonStyle(.plain)
@@ -255,6 +251,7 @@ private struct PanelContainer<Content: View>: View {
 /// shared interior edges look seamless.
 private struct SideColumn: View {
     let side: PanelSide
+    let settings: RendererSettings
     @Binding var activePanels: Set<String>
 
     private var visiblePanels: [PanelDef] {
@@ -282,9 +279,10 @@ private struct SideColumn: View {
                             isTopInColumn: isTop,
                             isBottomInColumn: isBottom
                         ) {
-                            if panel.id == "about" {
-                                AboutView()
-                            } else {
+                            switch panel.id {
+                            case "about":    AboutView()
+                            case "settings": SettingsView(settings: settings)
+                            default:
                                 PlaceholderPanelView(
                                     title: panel.label,
                                     icon: panel.icon,
@@ -309,7 +307,6 @@ private struct SideColumn: View {
 
     private func placeholderDescription(for id: String) -> String {
         switch id {
-        case "settings": return "Renderer settings will appear here."
         case "training": return "Neural network training controls will appear here."
         case "stats":    return "GPU timing and frame statistics will appear here."
         default:         return ""
@@ -317,17 +314,33 @@ private struct SideColumn: View {
     }
 }
 
+// MARK: - AppState
+
+/// Owns both RendererSettings and Renderer so they share the same settings
+/// reference from construction — avoids the @State closure / @StateObject
+/// timing problem in ContentView.
+private class AppState: ObservableObject {
+    var objectWillChange: ObservableObjectPublisher
+    
+    let settings: RendererSettings
+    let renderer: Renderer
+
+    init() {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            fatalError("This device does not support Metal.")
+        }
+        let s = RendererSettings()
+        self.settings = s
+        self.renderer = Renderer(device: device, settings: s)
+        self.objectWillChange = ObservableObjectPublisher()
+    }
+}
+
 // MARK: - ContentView
 
 struct ContentView: View {
 
-    @State private var renderer: Renderer = {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            fatalError("This device does not support Metal.")
-        }
-        return Renderer(device: device)
-    }()
-
+    @StateObject private var appState  = AppState()
     @StateObject private var sceneLoader = SceneLoader()
 
     @State private var isHUDExpanded: Bool = false
@@ -337,14 +350,14 @@ struct ContentView: View {
         ZStack {
             // Full-screen Metal render view (always present; renders a clear
             // colour until the mesh is ready)
-            MetalView(delegate: renderer)
+            MetalView(delegate: appState.renderer)
                 .ignoresSafeArea()
 
             // Left column (Training / About)
-            SideColumn(side: .left, activePanels: $activePanels)
+            SideColumn(side: .left, settings: appState.settings, activePanels: $activePanels)
 
             // Right column (Stats / Settings)
-            SideColumn(side: .right, activePanels: $activePanels)
+            SideColumn(side: .right, settings: appState.settings, activePanels: $activePanels)
 
             // Bottom HUD
             VStack {
@@ -396,7 +409,7 @@ struct ContentView: View {
         .onChange(of: sceneLoader.isLoaded) { loaded in
             if loaded, let mesh = sceneLoader.mesh {
                 withAnimation(.easeOut(duration: 0.6)) {
-                    renderer.setModel(mesh)
+                    appState.renderer.setModel(mesh)
                 }
             }
         }

@@ -21,7 +21,7 @@ class Renderer: NSObject, MetalViewDelegate {
     private let compiler:      MTL4Compiler
     private let frameManager:  FrameManager
 
-    init(device: MTLDevice) {
+    init(device: MTLDevice, settings: RendererSettings) {
         self.device = device
 
         let cmdQueueDescriptor       = MTL4CommandQueueDescriptor()
@@ -44,7 +44,7 @@ class Renderer: NSObject, MetalViewDelegate {
                                 residencySet: self.residencySet,
                                 compiler: self.compiler)
 
-        self.frameManager = FrameManager()
+        self.frameManager = FrameManager(settings: settings)
     }
 
     func setModel(_ mesh: Mesh) {
@@ -57,6 +57,7 @@ class Renderer: NSObject, MetalViewDelegate {
         view.clearColor       = .init(red: 0.0, green: 0.0, blue: 0.0, alpha: 1.0)
         view.sampleCount      = 1
         view.delegate         = self
+        view.framebufferOnly  = false
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
