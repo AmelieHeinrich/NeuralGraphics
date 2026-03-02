@@ -8,35 +8,48 @@
 import SwiftUI
 import Metal
 
-// MARK: - Panel Edge
+// Shared animation used throughout — defined at file scope to avoid
+// overload-resolution ambiguity inside closures.
+private let panelAnimation: Animation = .spring(response: 0.36, dampingFraction: 0.74)
 
-enum PanelEdge {
-    case left, right, top, bottom
+// MARK: - Panel Side
 
-    var insertionTransition: AnyTransition {
+enum PanelSide {
+    case left, right
+
+    var transition: AnyTransition {
         switch self {
-        case .left:   return .move(edge: .leading).combined(with: .opacity)
-        case .right:  return .move(edge: .trailing).combined(with: .opacity)
-        case .top:    return .move(edge: .top).combined(with: .opacity)
-        case .bottom: return .move(edge: .bottom).combined(with: .opacity)
+        case .left:  return .move(edge: .leading).combined(with: .opacity)
+        case .right: return .move(edge: .trailing).combined(with: .opacity)
         }
     }
 }
 
-// MARK: - HUD Action Model
+// MARK: - Panel Definition
 
-struct HUDAction: Identifiable {
+struct PanelDef: Identifiable {
     let id: String
     let icon: String
     let label: String
     let color: Color
-    let edge: PanelEdge
+    let side: PanelSide
 }
+
+// MARK: - All panels, in display order per side
+
+private let allPanels: [PanelDef] = [
+    // Left column — top to bottom
+    PanelDef(id: "training", icon: "brain.head.profile", label: "Training", color: .pink,   side: .left),
+    PanelDef(id: "about",    icon: "info.circle",        label: "About",    color: .cyan,   side: .left),
+    // Right column — top to bottom
+    PanelDef(id: "stats",    icon: "chart.bar.xaxis",    label: "Stats",    color: .orange, side: .right),
+    PanelDef(id: "settings", icon: "gearshape",          label: "Settings", color: .indigo, side: .right),
+]
 
 // MARK: - HUD Button
 
 private struct HUDButton: View {
-    let action: HUDAction
+    let panel: PanelDef
     let isActive: Bool
     let onTap: () -> Void
 
@@ -49,24 +62,25 @@ private struct HUDButton: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(
                             isActive
-                                ? action.color.opacity(0.30)
-                                : (isHovered ? action.color.opacity(0.18) : action.color.opacity(0.08))
+                                ? panel.color.opacity(0.30)
+                                : (isHovered ? panel.color.opacity(0.18) : panel.color.opacity(0.08))
                         )
                         .frame(width: 46, height: 46)
 
-                    Image(systemName: action.icon)
+                    Image(systemName: panel.icon)
                         .font(.system(size: 18, weight: .medium))
                         .foregroundStyle(
-                            isActive ? action.color : (isHovered ? action.color : action.color.opacity(0.7))
+                            isActive
+                                ? panel.color
+                                : (isHovered ? panel.color : panel.color.opacity(0.65))
                         )
                         .scaleEffect(isActive ? 1.1 : 1.0)
+                        .animation(panelAnimation, value: isActive)
                 }
 
-                Text(action.label)
+                Text(panel.label)
                     .font(.system(size: 9.5, weight: .semibold))
-                    .foregroundStyle(
-                        isActive ? action.color : (isHovered ? .primary : .secondary)
-                    )
+                    .foregroundStyle(isActive ? panel.color : (isHovered ? .primary : .secondary))
             }
             .frame(width: 60, height: 64)
             .contentShape(Rectangle())
@@ -74,31 +88,34 @@ private struct HUDButton: View {
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.13), value: isHovered)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
-        .help(action.label)
+        .help(panel.label)
     }
 }
 
 // MARK: - HUD Pill
 
 private struct HUDPill: View {
-    let actions: [HUDAction]
-    @Binding var activePanel: String?
+    let panels: [PanelDef]
+    @Binding var activePanels: Set<String>
     @Binding var isExpanded: Bool
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(actions) { item in
+            ForEach(panels) { panel in
                 HUDButton(
-                    action: item,
-                    isActive: activePanel == item.id
+                    panel: panel,
+                    isActive: activePanels.contains(panel.id)
                 ) {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.74)) {
-                        activePanel = (activePanel == item.id) ? nil : item.id
+                    withAnimation(panelAnimation) {
+                        if activePanels.contains(panel.id) {
+                            activePanels.remove(panel.id)
+                        } else {
+                            activePanels.insert(panel.id)
+                        }
                     }
                 }
 
-                if item.id != actions.last?.id {
+                if panel.id != panels.last?.id {
                     Divider()
                         .frame(height: 28)
                         .opacity(0.25)
@@ -111,10 +128,10 @@ private struct HUDPill: View {
                 .opacity(0.25)
                 .padding(.horizontal, 2)
 
-            // Dismiss button
+            // Dismiss
             Button {
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) {
-                    activePanel = nil
+                withAnimation(panelAnimation) {
+                    activePanels.removeAll()
                     isExpanded = false
                 }
             } label: {
@@ -168,11 +185,31 @@ private struct RevealButton: View {
 // MARK: - Panel Container
 
 private struct PanelContainer<Content: View>: View {
-    let title: String
-    let color: Color
-    let edge: PanelEdge
+    let panel: PanelDef
     let onClose: () -> Void
+    let isTopInColumn: Bool
+    let isBottomInColumn: Bool
     @ViewBuilder let content: () -> Content
+
+    private var shape: some InsettableShape {
+        let r: CGFloat = 16
+        switch panel.side {
+        case .left:
+            return UnevenRoundedRectangle(
+                topLeadingRadius: 0,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: isBottomInColumn ? r : 0,
+                topTrailingRadius: isTopInColumn ? r : 0
+            )
+        case .right:
+            return UnevenRoundedRectangle(
+                topLeadingRadius: isTopInColumn ? r : 0,
+                bottomLeadingRadius: isBottomInColumn ? r : 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 0
+            )
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -180,10 +217,10 @@ private struct PanelContainer<Content: View>: View {
             HStack {
                 HStack(spacing: 8) {
                     Circle()
-                        .fill(color)
+                        .fill(panel.color)
                         .frame(width: 8, height: 8)
-                        .shadow(color: color.opacity(0.8), radius: 4)
-                    Text(title)
+                        .shadow(color: panel.color.opacity(0.8), radius: 4)
+                    Text(panel.label)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.primary)
                 }
@@ -196,52 +233,86 @@ private struct PanelContainer<Content: View>: View {
                         .background(.white.opacity(0.07), in: Circle())
                 }
                 .buttonStyle(.plain)
-                .help("Close")
+                .help("Close \(panel.label)")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
 
             Divider().opacity(0.3)
 
-            // Panel content
             content()
         }
-        .background(.ultraThinMaterial)
-        .overlay(
-            panelBorder
-        )
-        .clipShape(panelShape)
-        .shadow(color: .black.opacity(0.35), radius: 24, x: 0, y: 6)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.97))
+        .overlay(shape.strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .clipShape(shape)
+        .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 4)
+    }
+}
+
+// MARK: - Side Column
+
+/// Renders all visible panels for one side, stacked vertically with no gap so
+/// shared interior edges look seamless.
+private struct SideColumn: View {
+    let side: PanelSide
+    @Binding var activePanels: Set<String>
+
+    private var visiblePanels: [PanelDef] {
+        allPanels.filter { $0.side == side && activePanels.contains($0.id) }
     }
 
-    @ViewBuilder
-    private var panelBorder: some View {
-        panelShape
-            .strokeBorder(.white.opacity(0.12), lineWidth: 1)
+    var body: some View {
+        let visible = visiblePanels
+        if !visible.isEmpty {
+            HStack(spacing: 0) {
+                if side == .right { Spacer() }
+
+                VStack(spacing: 0) {
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, panel in
+                        let isTop    = index == 0
+                        let isBottom = index == visible.count - 1
+
+                        PanelContainer(
+                            panel: panel,
+                            onClose: {
+                                withAnimation(panelAnimation) {
+                                    _ = activePanels.remove(panel.id)
+                                }
+                            },
+                            isTopInColumn: isTop,
+                            isBottomInColumn: isBottom
+                        ) {
+                            if panel.id == "about" {
+                                AboutView()
+                            } else {
+                                PlaceholderPanelView(
+                                    title: panel.label,
+                                    icon: panel.icon,
+                                    color: panel.color,
+                                    description: placeholderDescription(for: panel.id)
+                                )
+                            }
+                        }
+                        // Add a thin seam between stacked panels
+                        if !isBottom {
+                            Divider().opacity(0.25)
+                        }
+                    }
+                }
+                .frame(width: 260)
+
+                if side == .left { Spacer() }
+            }
+            .transition(side.transition)
+        }
     }
 
-    private var panelShape: some InsettableShape {
-        switch edge {
-        case .left:
-            return UnevenRoundedRectangle(
-                topLeadingRadius: 0, bottomLeadingRadius: 0,
-                bottomTrailingRadius: 16, topTrailingRadius: 16
-            )
-        case .right:
-            return UnevenRoundedRectangle(
-                topLeadingRadius: 16, bottomLeadingRadius: 16,
-                bottomTrailingRadius: 0, topTrailingRadius: 0
-            )
-        case .top:
-            return UnevenRoundedRectangle(
-                topLeadingRadius: 0, bottomLeadingRadius: 16,
-                bottomTrailingRadius: 16, topTrailingRadius: 0
-            )
-        case .bottom:
-            return UnevenRoundedRectangle(
-                topLeadingRadius: 16, bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0, topTrailingRadius: 16
-            )
+    private func placeholderDescription(for id: String) -> String {
+        switch id {
+        case "settings": return "Renderer settings will appear here."
+        case "training": return "Neural network training controls will appear here."
+        case "stats":    return "GPU timing and frame statistics will appear here."
+        default:         return ""
         }
     }
 }
@@ -257,22 +328,8 @@ struct ContentView: View {
         return Renderer(device: device)
     }()
 
-    @State private var isHUDExpanded = false
-    @State private var activePanel: String? = nil
-
-    // MARK: Panel definitions
-    private let actions: [HUDAction] = [
-        HUDAction(id: "about",    icon: "info.circle",       label: "About",    color: .cyan,   edge: .left),
-        HUDAction(id: "settings", icon: "gearshape",         label: "Settings", color: .indigo, edge: .right),
-        HUDAction(id: "training", icon: "brain.head.profile", label: "Training", color: .pink,   edge: .top),
-        HUDAction(id: "stats",    icon: "chart.bar.xaxis",   label: "Stats",    color: .orange, edge: .bottom),
-    ]
-
-    private func action(for id: String) -> HUDAction? {
-        actions.first { $0.id == id }
-    }
-
-    // MARK: Body
+    @State private var isHUDExpanded: Bool = false
+    @State private var activePanels: Set<String> = []
 
     var body: some View {
         ZStack {
@@ -280,74 +337,18 @@ struct ContentView: View {
             MetalView(delegate: renderer)
                 .ignoresSafeArea()
 
-            // Left panel (About)
-            if let panel = action(for: "about"), activePanel == "about" {
-                HStack(spacing: 0) {
-                    PanelContainer(title: panel.label, color: panel.color, edge: .left) {
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.74)) { activePanel = nil }
-                    } content: {
-                        AboutView()
-                    }
-                    .frame(width: 260)
-                    .frame(maxHeight: .infinity)
-                    Spacer()
-                }
-                .transition(panel.edge.insertionTransition)
-            }
+            // Left column (Training / About)
+            SideColumn(side: .left, activePanels: $activePanels)
 
-            // Right panel (Settings)
-            if let panel = action(for: "settings"), activePanel == "settings" {
-                HStack(spacing: 0) {
-                    Spacer()
-                    PanelContainer(title: panel.label, color: panel.color, edge: .right) {
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.74)) { activePanel = nil }
-                    } content: {
-                        PlaceholderPanelView(title: panel.label, icon: panel.icon, color: panel.color, description: "Renderer settings will appear here.")
-                    }
-                    .frame(width: 260)
-                    .frame(maxHeight: .infinity)
-                }
-                .transition(panel.edge.insertionTransition)
-            }
+            // Right column (Stats / Settings)
+            SideColumn(side: .right, activePanels: $activePanels)
 
-            // Top panel (Training)
-            if let panel = action(for: "training"), activePanel == "training" {
-                VStack(spacing: 0) {
-                    PanelContainer(title: panel.label, color: panel.color, edge: .top) {
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.74)) { activePanel = nil }
-                    } content: {
-                        PlaceholderPanelView(title: panel.label, icon: panel.icon, color: panel.color, description: "Neural network training controls will appear here.")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 220)
-                    Spacer()
-                }
-                .transition(panel.edge.insertionTransition)
-            }
-
-            // Bottom panel (Stats) — sits above the HUD bar
-            if let panel = action(for: "stats"), activePanel == "stats" {
-                VStack(spacing: 0) {
-                    Spacer()
-                    PanelContainer(title: panel.label, color: panel.color, edge: .bottom) {
-                        withAnimation(.spring(response: 0.36, dampingFraction: 0.74)) { activePanel = nil }
-                    } content: {
-                        PlaceholderPanelView(title: panel.label, icon: panel.icon, color: panel.color, description: "GPU timing and frame statistics will appear here.")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 180)
-                    // Leave room for the HUD pill
-                    .padding(.bottom, 86)
-                }
-                .transition(panel.edge.insertionTransition)
-            }
-
-            // Bottom HUD overlay
+            // Bottom HUD
             VStack {
                 Spacer()
 
                 if isHUDExpanded {
-                    HUDPill(actions: actions, activePanel: $activePanel, isExpanded: $isHUDExpanded)
+                    HUDPill(panels: allPanels, activePanels: $activePanels, isExpanded: $isHUDExpanded)
                         .transition(
                             .asymmetric(
                                 insertion: .scale(scale: 0.80, anchor: .bottom)
@@ -362,7 +363,7 @@ struct ContentView: View {
 
                 if !isHUDExpanded {
                     RevealButton {
-                        withAnimation(.spring(response: 0.38, dampingFraction: 0.72)) {
+                        withAnimation(panelAnimation) {
                             isHUDExpanded = true
                         }
                     }

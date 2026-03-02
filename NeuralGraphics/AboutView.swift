@@ -71,7 +71,7 @@ struct AboutView: View {
 
             Spacer()
         }
-        .frame(width: 280)
+        .frame(maxWidth: .infinity)
         .frame(minHeight: 320)
     }
 }
