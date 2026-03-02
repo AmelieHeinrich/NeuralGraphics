@@ -7,6 +7,8 @@
 
 #include "TextureCompressor.h"
 
+#include <Metal/Metal.h>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "ThirdParty/stb_image.h"
 
@@ -128,7 +130,7 @@ void CompressTexture(const std::string& source, const std::string& out)
 
     // Write output: TextureHeader followed by tightly packed mip data
     TextureHeader header = {};
-    header.Format    = MTLPixelFormatASTC_4x4_LDR;
+    header.Format    = static_cast<uint32_t>(MTLPixelFormatASTC_4x4_LDR);
     header.Width     = static_cast<uint32_t>(width);
     header.Height    = static_cast<uint32_t>(height);
     header.MipLevels = mipLevels;

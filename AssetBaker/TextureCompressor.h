@@ -10,11 +10,12 @@
 #include <AppleTextureEncoder.h>
 #include <string>
 
-#include <Metal/Metal.h>
-
+// All fields are uint32_t so sizeof(TextureHeader) == 16 with no padding.
+// MTLPixelFormat values fit in 32 bits; using NSUInteger/MTLPixelFormat directly
+// would add 4 bytes of trailing padding and misalign the payload.
 struct TextureHeader
 {
-    MTLPixelFormat Format;
+    uint32_t Format;
     uint32_t Width;
     uint32_t Height;
     uint32_t MipLevels;

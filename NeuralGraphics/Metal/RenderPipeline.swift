@@ -66,7 +66,7 @@ class RenderPipeline {
             let depthDescriptor = MTLDepthStencilDescriptor()
             depthDescriptor.depthCompareFunction = descriptor.depthCompareOp
             depthDescriptor.isDepthWriteEnabled = descriptor.depthWriteEnabled
-            
+
             self.depthStencilState = RendererData.device.makeDepthStencilState(descriptor: depthDescriptor)!
         }
         

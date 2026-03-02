@@ -57,4 +57,11 @@ class Texture {
     func uploadData(region: MTLRegion, mip: Int, data: UnsafeRawPointer, bpp: Int) {
         self.texture.replace(region: region, mipmapLevel: mip, withBytes: data, bytesPerRow: self.texture.width * bpp)
     }
+
+    // For block-compressed formats (ASTC 4x4, BC7, etc.): bytesPerRow is the stride
+    // of one row of compressed blocks, not one row of pixels.
+    // e.g. ASTC 4x4: bytesPerRow = ((width + 3) / 4) * 16
+    func uploadCompressedData(region: MTLRegion, mip: Int, data: UnsafeRawPointer, bytesPerRow: Int) {
+        self.texture.replace(region: region, mipmapLevel: mip, withBytes: data, bytesPerRow: bytesPerRow)
+    }
 }

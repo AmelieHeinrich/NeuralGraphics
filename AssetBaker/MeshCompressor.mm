@@ -86,6 +86,36 @@ static void GenerateTangents(std::vector<MeshVertex>& expanded)
     genTangSpaceDefault(&ctx);
 }
 
+// ---- Transform helpers ------------------------------------------------------
+// cgltf matrices are column-major: M[col*4 + row].
+
+static void TransformPoint(float out[3], const float M[16], const float p[3])
+{
+    out[0] = M[0]*p[0] + M[4]*p[1] + M[8]*p[2]  + M[12];
+    out[1] = M[1]*p[0] + M[5]*p[1] + M[9]*p[2]  + M[13];
+    out[2] = M[2]*p[0] + M[6]*p[1] + M[10]*p[2] + M[14];
+}
+
+// Transform a direction by the adjugate (det * inverse-transpose) of the
+// upper-left 3x3 of M, then renormalize.  Correct for non-uniform scale.
+static void TransformNormal(float out[3], const float M[16], const float n[3])
+{
+    float c0 = M[5]*M[10] - M[9]*M[6];
+    float c1 = M[9]*M[2]  - M[1]*M[10];
+    float c2 = M[1]*M[6]  - M[5]*M[2];
+    float c3 = M[8]*M[6]  - M[4]*M[10];
+    float c4 = M[0]*M[10] - M[8]*M[2];
+    float c5 = M[4]*M[2]  - M[0]*M[6];
+    float c6 = M[4]*M[9]  - M[8]*M[5];
+    float c7 = M[8]*M[1]  - M[0]*M[9];
+    float c8 = M[0]*M[5]  - M[4]*M[1];
+    out[0] = c0*n[0] + c3*n[1] + c6*n[2];
+    out[1] = c1*n[0] + c4*n[1] + c7*n[2];
+    out[2] = c2*n[0] + c5*n[1] + c8*n[2];
+    float len = std::sqrt(out[0]*out[0] + out[1]*out[1] + out[2]*out[2]);
+    if (len > 1e-8f) { out[0] /= len; out[1] /= len; out[2] /= len; }
+}
+
 // ---- Helpers ----------------------------------------------------------------
 
 static std::string OutputTexturePath(const std::string& outDir, const char* uri)
@@ -168,8 +198,16 @@ void CompressMesh(const std::string& in, const std::string& out)
     constexpr size_t kMaxTriangles = 124;
     constexpr float  kConeWeight   = 0.5f;
 
-    for (size_t mi = 0; mi < data->meshes_count; mi++) {
-        cgltf_mesh& mesh = data->meshes[mi];
+    // Iterate nodes so we can pick up each node's world transform and apply it
+    // to the vertices (equivalent to aiProcess_PreTransformVertices).
+    for (size_t ni = 0; ni < data->nodes_count; ni++) {
+        cgltf_node& node = data->nodes[ni];
+        if (!node.mesh) continue;
+
+        float worldMat[16];
+        cgltf_node_transform_world(&node, worldMat);
+
+        cgltf_mesh& mesh = *node.mesh;
 
         for (size_t pi = 0; pi < mesh.primitives_count; pi++) {
             cgltf_primitive& prim = mesh.primitives[pi];
@@ -201,6 +239,15 @@ void CompressMesh(const std::string& in, const std::string& out)
                 cgltf_accessor_read_float(posAcc,  vi, v.Position, 3);
                 if (normAcc) cgltf_accessor_read_float(normAcc, vi, v.Normal, 3);
                 if (uvAcc)   cgltf_accessor_read_float(uvAcc,   vi, v.UV,     2);
+            }
+
+            // ---- Apply node world transform (pre-transform vertices) ----
+            for (MeshVertex& v : rawVerts) {
+                float tp[3], tn[3];
+                TransformPoint(tp, worldMat, v.Position);
+                TransformNormal(tn, worldMat, v.Normal);
+                v.Position[0] = tp[0]; v.Position[1] = tp[1]; v.Position[2] = tp[2];
+                v.Normal[0]   = tn[0]; v.Normal[1]   = tn[1]; v.Normal[2]   = tn[2];
             }
 
             // ---- Extract indices ----
@@ -324,6 +371,7 @@ void CompressMesh(const std::string& in, const std::string& out)
             memcpy(inst.AABBMax, aabbMax, sizeof(aabbMax));
             inst.VertexOffset          = static_cast<uint32_t>(allVertices.size());
             inst.IndexOffset           = static_cast<uint32_t>(allIndices.size());
+            inst.IndexCount            = static_cast<uint32_t>(indexCount);
             inst.MeshletOffset         = static_cast<uint32_t>(allMeshlets.size());
             inst.MeshletVerticesOffset = static_cast<uint32_t>(allMeshletVertices.size());
             inst.MeshletIndicesOffset  = static_cast<uint32_t>(allMeshletTriangles.size());

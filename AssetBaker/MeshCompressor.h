@@ -32,6 +32,7 @@ struct MeshInstance
     float AABBMax[3];
     uint32_t VertexOffset;
     uint32_t IndexOffset;
+    uint32_t IndexCount;
     uint32_t MeshletOffset;
     uint32_t MeshletVerticesOffset;
     uint32_t MeshletIndicesOffset;

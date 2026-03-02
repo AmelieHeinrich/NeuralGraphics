@@ -84,7 +84,8 @@ class RenderPass {
     }
     
     func drawIndexed(primitimeType: MTLPrimitiveType, buffer: Buffer, indexCount: Int, indexOffset: UInt64) {
-        self.encoder.drawIndexedPrimitives(primitiveType: primitimeType, indexCount: indexCount, indexType: .uint32, indexBuffer: buffer.getAddress() + indexOffset, indexBufferLength: indexCount * MemoryLayout<UInt32>.size)
+        let byteOffset = indexOffset * UInt64(MemoryLayout<UInt32>.size)
+        self.encoder.drawIndexedPrimitives(primitiveType: primitimeType, indexCount: indexCount, indexType: .uint32, indexBuffer: buffer.getAddress() + byteOffset, indexBufferLength: indexCount * MemoryLayout<UInt32>.size)
     }
     
     func setTexture(texture: Texture, index: Int, stages: MTLRenderStages) {

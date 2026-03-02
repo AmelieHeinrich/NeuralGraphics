@@ -13,6 +13,11 @@ protocol MetalViewDelegate : MTKViewDelegate {
     @MainActor func configure(_ view: MTKView)
 }
 
+struct ModelData {
+    var camera: simd_float4x4
+    var vertexOffset: uint
+}
+
 class Renderer : NSObject, MetalViewDelegate {
     let device: MTLDevice
     let maxFramesInFlight: UInt64 = 3
@@ -25,9 +30,9 @@ class Renderer : NSObject, MetalViewDelegate {
     private let commandBuffers: [CommandBuffer]
     private let renderPipeline: RenderPipeline
     private let resourceManager: ResourceManager
-    private let indexBuffer: Buffer
-    private let texture: MTLTexture
     private let gpuAllocator: GPULinearAllocator
+    private let model: Mesh
+    private var depthTexture: Texture
     private var lastFrameTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
 
     init(device: MTLDevice) {
@@ -63,18 +68,25 @@ class Renderer : NSObject, MetalViewDelegate {
         pipelineDescriptor.vertexFunction = "triangle_vs"
         pipelineDescriptor.fragmentFunction = "triangle_fs"
         pipelineDescriptor.pixelFormats.append(.bgra8Unorm)
+        pipelineDescriptor.depthFormat       = .depth32Float
+        pipelineDescriptor.depthEnabled      = true
+        pipelineDescriptor.depthWriteEnabled = true
 
         self.renderPipeline = RenderPipeline(descriptor: pipelineDescriptor)
 
-        let indices: [UInt32] = [0, 1, 3, 1, 2, 3]
-        self.indexBuffer = Buffer(bytes: indices, size: indices.count * MemoryLayout<UInt32>.size)
-        self.indexBuffer.setName(name: "Index Buffer")
-
-        self.texture = try! self.resourceManager.texture(url: Bundle.main.url(forResource: "TestTexture", withExtension: "png")!, sRGB: true)
-        self.texture.label = "TestTexture.png"
-
         // 16 megabytes
         self.gpuAllocator = GPULinearAllocator(size: 16 * 1024 * 1024)
+
+        // Depth buffer — starts at 1×1, resized on the first drawableSizeWillChange
+        let depthDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .depth32Float, width: 1, height: 1, mipmapped: false)
+        depthDesc.usage       = .renderTarget
+        depthDesc.storageMode = .private
+        self.depthTexture = Texture(descriptor: depthDesc)
+        self.depthTexture.setLabel(name: "Depth Buffer")
+
+        // Load model
+        self.model = MeshLoader.load(url: Bundle.main.url(forResource: "Sponza", withExtension: ".bin")!)!
     }
 
     func configure(_ view: MTKView) {
@@ -87,6 +99,7 @@ class Renderer : NSObject, MetalViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         camera.resize(width: Float(size.width), height: Float(size.height))
+        depthTexture.resize(width: Int(size.width), height: Int(size.height))
     }
 
     func draw(in view: MTKView) {
@@ -105,22 +118,26 @@ class Renderer : NSObject, MetalViewDelegate {
 
         var renderPassDescriptor = RenderPassDescriptor()
         renderPassDescriptor.addAttachment(texture: drawable.texture)
+        renderPassDescriptor.setDepthAttachment(texture: depthTexture)
         renderPassDescriptor.name = "Draw Quads"
-
-        var cameraMatrix = camera.projectionMatrix * camera.viewMatrix
-        let offset = gpuAllocator.allocate(size: MemoryLayout<simd_float4x4>.size)
-        withUnsafePointer(to: &cameraMatrix) { ptr in
-            let ptr = UnsafeRawPointer(ptr)
-            gpuAllocator.writeData(data: ptr, offset: offset, size: MemoryLayout<simd_float4x4>.size)
-        }
 
         cmdBuffer.begin()
 
         let renderPass = cmdBuffer.beginRenderPass(descriptor: renderPassDescriptor)
         renderPass.setPipeline(pipeline: self.renderPipeline)
-        renderPass.setBuffer(buf: gpuAllocator.buffer, index: 0, stages: .vertex, offset: offset)
-        renderPass.setTexture(texture: self.texture, index: 0, stages: .fragment)
-        renderPass.drawIndexed(primitimeType: .triangle, buffer: self.indexBuffer, indexCount: 6, indexOffset: 0)
+        for instance in model.instances {
+            let offset = gpuAllocator.allocate(size: MemoryLayout<ModelData>.size)
+            var modelData = ModelData(camera: camera.projectionMatrix * camera.viewMatrix, vertexOffset: instance.vertexOffset)
+            withUnsafePointer(to: &modelData) { ptr in
+                let ptr = UnsafeRawPointer(ptr)
+                gpuAllocator.writeData(data: ptr, offset: offset, size: MemoryLayout<ModelData>.size)
+            }
+
+            renderPass.setBuffer(buf: gpuAllocator.buffer, index: 0, stages: .vertex, offset: offset)
+            renderPass.setBuffer(buf: model.vertexBuffer, index: 1, stages: .vertex)
+            renderPass.setTexture(texture: model.materials[Int(instance.materialIndex)].albedo!, index: 0, stages: .fragment)
+            renderPass.drawIndexed(primitimeType: .triangle, buffer: model.indexBuffer, indexCount: Int(instance.indexCount), indexOffset: UInt64(instance.indexOffset))
+        }
         renderPass.end()
         cmdBuffer.end()
 
