@@ -17,4 +17,5 @@ enum RendererTimelineType {
 class RendererSettings: ObservableObject {
     @Published var currentTimeline: RendererTimelineType = .Desktop
     @Published var tonemapGamma: Float = 2.2
+    @Published var debugDepthTest: Bool = false
 }

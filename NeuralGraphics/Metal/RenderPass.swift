@@ -79,6 +79,16 @@ class RenderPass {
         self.encoder.setArgumentTable(RendererData.fragmentTable, stages: .fragment)
     }
     
+    func setMeshPipeline(pipeline: MeshPipeline) {
+        self.encoder.setRenderPipelineState(pipeline.pipelineState)
+        if pipeline.depthStencilState != nil {
+            self.encoder.setDepthStencilState(pipeline.depthStencilState)
+        }
+        self.encoder.setArgumentTable(RendererData.meshTable, stages: .mesh)
+        self.encoder.setArgumentTable(RendererData.objectTable, stages: .object)
+        self.encoder.setArgumentTable(RendererData.fragmentTable, stages: .fragment)
+    }
+    
     func draw(primitiveType: MTLPrimitiveType, vertexCount: Int, vertexOffset: Int) {
         self.encoder.drawPrimitives(primitiveType: primitiveType, vertexStart: vertexOffset, vertexCount: vertexCount)
     }
@@ -88,12 +98,22 @@ class RenderPass {
         self.encoder.drawIndexedPrimitives(primitiveType: primitimeType, indexCount: indexCount, indexType: .uint32, indexBuffer: buffer.getAddress() + byteOffset, indexBufferLength: indexCount * MemoryLayout<UInt32>.size)
     }
     
+    func dispatchMesh(threadgroupsPerGrid: MTLSize, threadsPerObjectThreadgroup: MTLSize, threadsPerMeshThreadgroup: MTLSize) {
+        self.encoder.drawMeshThreadgroups(threadgroupsPerGrid: threadgroupsPerGrid, threadsPerObjectThreadgroup: threadsPerObjectThreadgroup, threadsPerMeshThreadgroup: threadsPerMeshThreadgroup)
+    }
+    
     func setTexture(texture: Texture, index: Int, stages: MTLRenderStages) {
         if stages.contains(.vertex) {
             RendererData.vertexTable.setTexture(texture.texture.gpuResourceID, index: index)
         }
         if stages.contains(.fragment) {
             RendererData.fragmentTable.setTexture(texture.texture.gpuResourceID, index: index)
+        }
+        if stages.contains(.mesh) {
+            RendererData.meshTable.setTexture(texture.texture.gpuResourceID, index: index)
+        }
+        if stages.contains(.object) {
+            RendererData.objectTable.setTexture(texture.texture.gpuResourceID, index: index)
         }
     }
     
@@ -104,6 +124,12 @@ class RenderPass {
         if stages.contains(.fragment) {
             RendererData.fragmentTable.setTexture(texture.gpuResourceID, index: index)
         }
+        if stages.contains(.mesh) {
+            RendererData.meshTable.setTexture(texture.gpuResourceID, index: index)
+        }
+        if stages.contains(.object) {
+            RendererData.objectTable.setTexture(texture.gpuResourceID, index: index)
+        }
     }
     
     func setBuffer(buf: Buffer, index: Int, stages: MTLRenderStages, offset: Int = 0) {
@@ -113,6 +139,12 @@ class RenderPass {
         if stages.contains(.fragment) {
             RendererData.fragmentTable.setAddress(buf.getAddress() + UInt64(offset), index: index)
         }
+        if stages.contains(.mesh) {
+            RendererData.meshTable.setAddress(buf.getAddress() + UInt64(offset), index: index)
+        }
+        if stages.contains(.object) {
+            RendererData.objectTable.setAddress(buf.getAddress() + UInt64(offset), index: index)
+        }
     }
     
     func setBuffer(buf: MTLBuffer, index: Int, stages: MTLRenderStages, offset: Int = 0) {
@@ -121,6 +153,12 @@ class RenderPass {
         }
         if stages.contains(.fragment) {
             RendererData.fragmentTable.setAddress(buf.gpuAddress + UInt64(offset), index: index)
+        }
+        if stages.contains(.mesh) {
+            RendererData.meshTable.setAddress(buf.gpuAddress + UInt64(offset), index: index)
+        }
+        if stages.contains(.object) {
+            RendererData.objectTable.setAddress(buf.gpuAddress + UInt64(offset), index: index)
         }
     }
     
@@ -132,6 +170,12 @@ class RenderPass {
         }
         if stages.contains(.fragment) {
             RendererData.fragmentTable.setAddress(allocator.buffer.buffer.gpuAddress + UInt64(offset), index: index)
+        }
+        if stages.contains(.mesh) {
+            RendererData.meshTable.setAddress(allocator.buffer.buffer.gpuAddress + UInt64(offset), index: index)
+        }
+        if stages.contains(.object) {
+            RendererData.objectTable.setAddress(allocator.buffer.buffer.gpuAddress + UInt64(offset), index: index)
         }
     }
     

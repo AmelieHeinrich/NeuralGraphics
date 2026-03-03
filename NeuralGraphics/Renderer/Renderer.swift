@@ -8,6 +8,7 @@
 import Metal
 import MetalKit
 import SwiftUI
+import simd
 
 protocol MetalViewDelegate: MTKViewDelegate {
     @MainActor func configure(_ view: MTKView)
@@ -66,6 +67,7 @@ class Renderer: NSObject, MetalViewDelegate {
 
     func draw(in view: MTKView) {
         guard let drawable = view.currentDrawable else { return }
+
         frameManager.render(drawable: drawable)
     }
 }

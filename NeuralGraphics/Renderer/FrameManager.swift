@@ -107,13 +107,16 @@ class FrameManager {
         // Initialize passes
         let forward = ForwardPass()
         let tonemap = TonemapPass(settings: settings)
-        self.passes = [forward, tonemap]
+        let debug   = DebugPass.shared
+        debug.settings = settings
+        self.passes = [forward, tonemap, debug]
 
         // Desktop pipeline
         let desktopTimeline = RenderTimeline()
         desktopTimeline.addPass(forward)
         desktopTimeline.addPass(tonemap)
-        
+        desktopTimeline.addPass(debug)
+
         self.desktopTimeline = desktopTimeline
     }
 }

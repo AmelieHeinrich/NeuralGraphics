@@ -16,21 +16,21 @@ private struct ModelData {
 }
 
 class ForwardPass: Pass {
-    private let pipeline:      RenderPipeline
+    private let pipeline:      MeshPipeline
     private var depthTexture:  Texture
     private var colorTexture:  Texture
     private let defaultAlbedo: Texture
 
     override init() {
-        var pipelineDesc = RenderPipelineDescriptor()
+        var pipelineDesc = MeshPipelineDescriptor()
         pipelineDesc.name = "Forward Pipeline"
-        pipelineDesc.vertexFunction = "triangle_vs"
-        pipelineDesc.fragmentFunction = "triangle_fs"
+        pipelineDesc.meshFunction = "mesh_ms"
+        pipelineDesc.fragmentFunction = "mesh_fs"
         pipelineDesc.pixelFormats.append(.rgba16Float)
         pipelineDesc.depthFormat = .depth32Float
         pipelineDesc.depthEnabled = true
         pipelineDesc.depthWriteEnabled = true
-        self.pipeline = RenderPipeline(descriptor: pipelineDesc)
+        self.pipeline = MeshPipeline(descriptor: pipelineDesc)
 
         // 1×1 white fallback albedo
         let whiteDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
@@ -75,18 +75,21 @@ class ForwardPass: Pass {
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
 
         if let model = context.model {
-            rp.setPipeline(pipeline: pipeline)
+            rp.setMeshPipeline(pipeline: pipeline)
 
             for instance in model.instances {
-                let albedo = model.materials[Int(instance.materialIndex)].albedo ?? defaultAlbedo
                 var data   = ModelData(camera: context.camera.viewProjection, vertexOffset: instance.vertexOffset)
                 
-                rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<ModelData>.size, stages: .vertex)
-                rp.setBuffer(buf: model.vertexBuffer, index: 1, stages: .vertex)
-                rp.setTexture(texture: albedo, index: 0, stages: .fragment)
-                rp.drawIndexed(primitimeType: .triangle, buffer: model.indexBuffer,
-                               indexCount: Int(instance.indexCount),
-                               indexOffset: UInt64(instance.indexOffset))
+                rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<ModelData>.size, stages: .mesh)
+                rp.setBuffer(buf: model.vertexBuffer, index: 1, stages: .mesh)
+                rp.setBuffer(buf: model.meshletBuffer, index: 2, stages: .mesh, offset: Int(instance.meshletOffset) * 16)
+                rp.setBuffer(buf: model.meshletVerticesBuffer, index: 3, stages: .mesh)
+                rp.setBuffer(buf: model.meshletTrianglesBuffer, index: 4, stages: .mesh)
+                rp.dispatchMesh(
+                    threadgroupsPerGrid: MTLSizeMake(Int(instance.meshletCount), 1, 1),
+                    threadsPerObjectThreadgroup: MTLSizeMake(0, 0, 0),
+                    threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1)
+                )
             }
         }
         rp.producerBarrier(before: .dispatch, after: .fragment)

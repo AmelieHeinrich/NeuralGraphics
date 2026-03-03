@@ -35,6 +35,23 @@ struct SettingsView: View {
                     }
                 }
                 
+                // Debug Draw section
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Debug Draw")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .textCase(.uppercase)
+
+                    HStack {
+                        Text("Depth Test")
+                            .font(.system(size: 12, weight: .medium))
+                        Spacer()
+                        Toggle("", isOn: $settings.debugDepthTest)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+
                 // Tonemap section
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Tonemap")
