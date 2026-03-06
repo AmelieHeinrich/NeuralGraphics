@@ -14,25 +14,39 @@ class TLAS {
     var instanceBuffer: Buffer
     var scratchBuffer: Buffer! = nil
     var blasMap: [UInt64] = []
-    
-    init() {
-        instanceBuffer = Buffer(size: MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.size * 16)
+    private var allocated: Bool = false
+
+    init(makeResidentNow: Bool = true) {
+        instanceBuffer = Buffer(size: MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.size * 16, makeResidentNow: makeResidentNow)
         instanceBuffer.setName(name: "TLAS Instance Buffer")
-        
+
         descriptor = MTL4InstanceAccelerationStructureDescriptor()
         descriptor.instanceCount = 16
         descriptor.instanceDescriptorType = .default
         descriptor.instanceDescriptorBuffer = MTL4BufferRangeMake(instanceBuffer.getAddress(), UInt64(instanceBuffer.size))
-        
+
         let sizes = RendererData.device.accelerationStructureSizes(descriptor: descriptor)
         tlas = RendererData.device.makeAccelerationStructure(size: sizes.accelerationStructureSize)!
-        scratchBuffer = Buffer(size: sizes.buildScratchBufferSize)
-        
-        RendererData.residencySet.addAllocation(tlas)
+        scratchBuffer = Buffer(size: sizes.buildScratchBufferSize, makeResidentNow: makeResidentNow)
+
+        if makeResidentNow {
+            RendererData.addResidentAllocation(tlas)
+            allocated = true
+        }
     }
-    
+
+    func makeResident() {
+        guard !allocated else { return }
+        instanceBuffer.makeResident()
+        scratchBuffer.makeResident()
+        RendererData.addResidentAllocation(tlas)
+        allocated = true
+    }
+
     deinit {
-        RendererData.residencySet.removeAllocation(tlas)
+        if allocated {
+            RendererData.removeResidentAllocation(tlas)
+        }
     }
     
     func resetInstanceBuffer() {

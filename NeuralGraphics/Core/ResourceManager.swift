@@ -30,7 +30,7 @@ class ResourceManager {
             return cached.texture
         }
         let tex = try textureLoader.load(name, sRGB: sRGB)
-        RendererData.residencySet.addAllocation(tex)
+        RendererData.addResidentAllocation(tex)
         textures[name] = CachedTexture(texture: tex, refCount: 1)
         return tex
     }
@@ -42,7 +42,7 @@ class ResourceManager {
             return cached.texture
         }
         let tex = try textureLoader.load(url: url, sRGB: sRGB)
-        RendererData.residencySet.addAllocation(tex)
+        RendererData.addResidentAllocation(tex)
         textures[key] = CachedTexture(texture: tex, refCount: 1)
         return tex
     }
@@ -51,7 +51,7 @@ class ResourceManager {
         guard var cached = textures[name] else { return }
         cached.refCount -= 1
         if cached.refCount <= 0 {
-            RendererData.residencySet.removeAllocation(cached.texture)
+            RendererData.removeResidentAllocation(cached.texture)
             textures.removeValue(forKey: name)
         } else {
             textures[name] = cached

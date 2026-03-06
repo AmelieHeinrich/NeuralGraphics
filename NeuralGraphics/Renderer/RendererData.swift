@@ -12,6 +12,19 @@ struct RendererData {
     static var cmdQueue: MTL4CommandQueue!
     static var residencySet: MTLResidencySet!
     static var compiler: MTL4Compiler!
+    private static let residencyLock = NSLock()
+
+    static func addResidentAllocation(_ allocation: some MTLAllocation) {
+        residencyLock.withLock { residencySet.addAllocation(allocation) }
+    }
+
+    static func removeResidentAllocation(_ allocation: some MTLAllocation) {
+        residencyLock.withLock { residencySet.removeAllocation(allocation) }
+    }
+
+    static func commitResidency() {
+        residencyLock.withLock { residencySet.commit() }
+    }
     static var library: MTLLibrary!
     static var gpuTimeline: GPUTimeline!
     
@@ -59,5 +72,11 @@ struct RendererData {
         
         argumentTableDescriptor.label = "ML Argument Table"
         self.mlTable = try! self.device.makeArgumentTable(descriptor: argumentTableDescriptor)
+    }
+    
+    static func waitIdle() {
+        let done = RendererData.device.makeSharedEvent()!
+        RendererData.cmdQueue.signalEvent(done, value: 1)
+        done.wait(untilSignaledValue: 1, timeoutMS: 10_000)
     }
 }

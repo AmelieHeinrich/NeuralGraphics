@@ -18,14 +18,14 @@ class Texture {
         self.texture = RendererData.device.makeTexture(descriptor: descriptor)!
 
         if makeResident {
-            RendererData.residencySet.addAllocation(self.texture)
+            RendererData.addResidentAllocation(self.texture)
             self.allocated = true
         }
     }
 
     func makeResident() {
         guard !allocated else { return }
-        RendererData.residencySet.addAllocation(self.texture)
+        RendererData.addResidentAllocation(self.texture)
         allocated = true
     }
     
@@ -36,7 +36,7 @@ class Texture {
     
     deinit {
         if self.allocated {
-            RendererData.residencySet.removeAllocation(self.texture)
+            RendererData.removeResidentAllocation(self.texture)
         }
     }
     
@@ -46,8 +46,8 @@ class Texture {
     }
     
     func resize(width: Int, height: Int, computeMipLevels: Bool = false) {
-        RendererData.residencySet.removeAllocation(self.texture)
-        
+        RendererData.removeResidentAllocation(self.texture)
+
         self.descriptor.width = width
         self.descriptor.height = height
         if computeMipLevels {
@@ -59,7 +59,7 @@ class Texture {
         self.texture = RendererData.device.makeTexture(descriptor: self.descriptor)!
         self.texture.label = self.label
         
-        RendererData.residencySet.addAllocation(self.texture)
+        RendererData.addResidentAllocation(self.texture)
     }
     
     func uploadData(region: MTLRegion, mip: Int, data: UnsafeRawPointer, bpp: Int) {

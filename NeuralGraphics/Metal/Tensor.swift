@@ -12,11 +12,11 @@ class Tensor {
     
     init(descriptor: MTLTensorDescriptor) {
         self.tensor = try! RendererData.device.makeTensor(descriptor: descriptor)
-        RendererData.residencySet.addAllocation(self.tensor)
+        RendererData.addResidentAllocation(self.tensor)
     }
     
     deinit {
-        RendererData.residencySet.removeAllocation(self.tensor)
+        RendererData.removeResidentAllocation(self.tensor)
     }
     
     func setName(name: String) {

@@ -401,7 +401,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
-            guard let url = Bundle.main.url(forResource: "Sponza", withExtension: ".bin") else {
+            guard let url = Bundle.main.url(forResource: "bistro_ext", withExtension: ".bin") else {
                 fatalError("Model not in bundle")
             }
             sceneLoader.beginLoading(url: url)

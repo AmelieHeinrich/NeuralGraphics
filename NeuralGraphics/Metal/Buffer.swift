@@ -17,7 +17,7 @@ class Buffer {
         self.size = size
 
         if makeResidentNow {
-            RendererData.residencySet.addAllocation(self.buffer)
+            RendererData.addResidentAllocation(self.buffer)
             self.allocated = true
         }
     }
@@ -27,20 +27,20 @@ class Buffer {
         self.size = size
 
         if makeResidentNow {
-            RendererData.residencySet.addAllocation(self.buffer)
+            RendererData.addResidentAllocation(self.buffer)
             self.allocated = true
         }
     }
 
     deinit {
         if self.allocated {
-            RendererData.residencySet.removeAllocation(self.buffer)
+            RendererData.removeResidentAllocation(self.buffer)
         }
     }
 
     func makeResident() {
         guard !allocated else { return }
-        RendererData.residencySet.addAllocation(self.buffer)
+        RendererData.addResidentAllocation(self.buffer)
         allocated = true
     }
 

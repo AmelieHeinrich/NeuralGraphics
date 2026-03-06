@@ -21,10 +21,12 @@ class CommandBuffer {
         self.commandBuffer.label = name
     }
     
-    func begin() {
+    func begin(commitResidencySet: Bool = true) {
         self.allocator.reset()
         self.commandBuffer.beginCommandBuffer(allocator: self.allocator)
-        RendererData.residencySet.commit()
+        if commitResidencySet {
+            RendererData.commitResidency()
+        }
     }
     
     func end() {

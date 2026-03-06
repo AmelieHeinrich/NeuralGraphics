@@ -256,6 +256,11 @@ class MeshLoader {
         // All seven buffers are added to the residency set in one go, avoiding
         // any race if load() is called from a background thread while the main
         // thread is already committing a prior residency set update.
+        if RendererData.device.supportsFamily(.apple9) {
+            mesh.blas = BLAS(model: mesh, makeResidentNow: false)
+            mesh.blas.setName(name: "\(name) BLAS")
+        }
+
         mesh.vertexBuffer.makeResident()
         mesh.indexBuffer.makeResident()
         mesh.meshletBuffer.makeResident()
@@ -263,18 +268,21 @@ class MeshLoader {
         mesh.meshletTrianglesBuffer.makeResident()
         mesh.meshletBoundsBuffer.makeResident()
         mesh.instanceBuffer.makeResident()
+        mesh.blas?.makeResident()
         
+        progress?(0.90, "Building BLAS…")
         if RendererData.device.supportsFamily(.apple9) {
-            progress?(0.90, "Building BLAS…")
-            mesh.blas = BLAS(model: mesh)
-        
             let commandBuffer = CommandBuffer()
-            commandBuffer.begin()
+            commandBuffer.begin(commitResidencySet: false)
             let cp = commandBuffer.beginComputePass()
             cp.buildBLAS(blas: mesh.blas)
             cp.end()
             commandBuffer.end()
             commandBuffer.commit()
+
+            RendererData.waitIdle()
+
+            mesh.blas.destroyScratch()
         }
 
         progress?(1.00, "Done")
