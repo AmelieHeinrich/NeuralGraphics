@@ -11,27 +11,58 @@ import SwiftUI
 
 // MARK: - Scene Loader
 
-/// Runs MeshLoader on a background thread and publishes progress back to the
-/// main thread so SwiftUI can drive the loading screen.
+/// Loads every model in a `SceneDescriptor` on a background thread and publishes
+/// progress back to the main thread so SwiftUI can drive the loading screen.
 final class SceneLoader: ObservableObject {
     @Published private(set) var progress: Double = 0
     @Published private(set) var status: String   = "Initializing…"
-    @Published private(set) var mesh: Mesh?      = nil
+    @Published private(set) var scene: RenderScene? = nil
 
-    var isLoaded: Bool { mesh != nil }
+    var isLoaded: Bool { scene != nil }
 
-    func beginLoading(url: URL) {
+    func beginLoading(descriptor: SceneDescriptor) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let loaded = MeshLoader.load(url: url) { p, s in
-                DispatchQueue.main.async { [weak self] in
-                    self?.progress = p
-                    self?.status   = s
-                }
+            let models = descriptor.models
+
+            // Deduplicate: collect the unique resource names in first-seen order.
+            var seen   = Set<String>()
+            var unique = [String]()
+            for m in models {
+                if seen.insert(m.resource).inserted { unique.append(m.resource) }
             }
+
+            // Load each unique mesh once, reporting progress across unique count.
+            var cache = [String: Mesh]()
+            for (i, resource) in unique.enumerated() {
+                let base  = Double(i)      / Double(unique.count)
+                let slice = 1.0            / Double(unique.count)
+
+                guard let url = Bundle.main.url(forResource: resource, withExtension: "bin") else {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.status = "Missing: \(resource).bin"
+                    }
+                    continue
+                }
+
+                let mesh = MeshLoader.load(url: url) { p, s in
+                    DispatchQueue.main.async { [weak self] in
+                        self?.progress = base + p * slice
+                        self?.status   = "[\(resource)] \(s)"
+                    }
+                }
+                if let mesh { cache[resource] = mesh }
+            }
+
+            // Build entities: each descriptor entry maps to its cached mesh.
+            let entities: [Entity] = models.compactMap { desc in
+                guard let mesh = cache[desc.resource] else { return nil }
+                return Entity(mesh: mesh, transform: desc.transform)
+            }
+
+            // Make textures resident on the main thread (residency set mutations
+            // are not thread-safe). Only do this for the unique meshes.
             DispatchQueue.main.async { [weak self] in
-                // Make every material texture resident now that we're back on
-                // the main thread (residency set mutations are not thread-safe).
-                if let mesh = loaded {
+                for mesh in cache.values {
                     for mat in mesh.materials {
                         mat.albedo?.makeResident()
                         mat.normal?.makeResident()
@@ -39,7 +70,10 @@ final class SceneLoader: ObservableObject {
                         mat.emissive?.makeResident()
                     }
                 }
-                self?.mesh     = loaded
+
+                let scene      = RenderScene()
+                scene.entities = entities
+                self?.scene    = scene
                 self?.progress = 1.0
                 self?.status   = "Ready"
             }

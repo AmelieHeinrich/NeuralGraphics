@@ -39,7 +39,7 @@ struct FrameContext {
     var cmdBuffer:  CommandBuffer
     var drawable:   CAMetalDrawable
     var resources:  ResourceRegistry
-    var model:      Mesh?
+    var scene:      RenderScene?
     var frameIndex: Int
     var allocator: GPULinearAllocator
 }

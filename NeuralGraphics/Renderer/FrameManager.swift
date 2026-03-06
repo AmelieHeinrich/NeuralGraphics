@@ -35,7 +35,7 @@ class FrameManager {
     private var desktopTimeline: RenderTimeline? = nil
     private var pathtracedTimeline: RenderTimeline? = nil
     
-    var model: Mesh?
+    var scene: RenderScene?
 
     init(settings: RendererSettings) {
         self.settings = settings
@@ -51,8 +51,8 @@ class FrameManager {
         setupTimelines(settings: settings)
     }
 
-    func setModel(_ mesh: Mesh) {
-        model = mesh
+    func setScene(_ scene: RenderScene) {
+        self.scene = scene
     }
 
     func resize(width: Int, height: Int) {
@@ -77,7 +77,7 @@ class FrameManager {
             cmdBuffer:  cmdBuffer,
             drawable:   drawable,
             resources:  resources,
-            model:      model,
+            scene:      scene,
             frameIndex: frameIndex,
             allocator: allocator
         )

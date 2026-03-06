@@ -86,37 +86,42 @@ class ForwardPass: Pass {
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
 
-        if let model = context.model {
-            if settings.useMeshShader {
-                rp.setMeshPipeline(pipeline: meshPipeline)
+        if let scene = context.scene {
+            for entity in scene.entities {
+                let model = entity.mesh
+                if settings.useMeshShader {
+                    rp.setMeshPipeline(pipeline: meshPipeline)
 
-                for instance in model.instances {
-                    var data = ModelData(camera: context.camera.viewProjection, vertexOffset: instance.vertexOffset)
+                    for instance in model.instances {
+                        var mvp = context.camera.projection * context.camera.view * entity.transform
+                        var data = ModelData(camera: mvp, vertexOffset: instance.vertexOffset)
 
-                    rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<ModelData>.size, stages: .mesh)
-                    rp.setBuffer(buf: model.vertexBuffer, index: 1, stages: .mesh)
-                    rp.setBuffer(buf: model.meshletBuffer, index: 2, stages: .mesh, offset: Int(instance.meshletOffset) * 16)
-                    rp.setBuffer(buf: model.meshletVerticesBuffer, index: 3, stages: .mesh)
-                    rp.setBuffer(buf: model.meshletTrianglesBuffer, index: 4, stages: .mesh)
-                    rp.dispatchMesh(
-                        threadgroupsPerGrid: MTLSizeMake(Int(instance.meshletCount), 1, 1),
-                        threadsPerObjectThreadgroup: MTLSizeMake(0, 0, 0),
-                        threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1)
-                    )
-                }
-            } else {
-                rp.setPipeline(pipeline: pipeline)
+                        rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<ModelData>.size, stages: .mesh)
+                        rp.setBuffer(buf: model.vertexBuffer, index: 1, stages: .mesh)
+                        rp.setBuffer(buf: model.meshletBuffer, index: 2, stages: .mesh, offset: Int(instance.meshletOffset) * 16)
+                        rp.setBuffer(buf: model.meshletVerticesBuffer, index: 3, stages: .mesh)
+                        rp.setBuffer(buf: model.meshletTrianglesBuffer, index: 4, stages: .mesh)
+                        rp.dispatchMesh(
+                            threadgroupsPerGrid: MTLSizeMake(Int(instance.meshletCount), 1, 1),
+                            threadsPerObjectThreadgroup: MTLSizeMake(0, 0, 0),
+                            threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1)
+                        )
+                    }
+                } else {
+                    rp.setPipeline(pipeline: pipeline)
 
-                for instance in model.instances {
-                    var data = ModelData(camera: context.camera.viewProjection, vertexOffset: instance.vertexOffset)
-                    let albedo = model.materials.indices.contains(Int(instance.materialIndex))
-                        ? (model.materials[Int(instance.materialIndex)].albedo ?? defaultAlbedo)
-                        : defaultAlbedo
+                    for instance in model.instances {
+                        var mvp = context.camera.projection * context.camera.view * entity.transform
+                        var data = ModelData(camera: mvp, vertexOffset: instance.vertexOffset)
+                        let albedo = model.materials.indices.contains(Int(instance.materialIndex))
+                            ? (model.materials[Int(instance.materialIndex)].albedo ?? defaultAlbedo)
+                            : defaultAlbedo
 
-                    rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<ModelData>.size, stages: .vertex)
-                    rp.setBuffer(buf: model.vertexBuffer, index: 1, stages: .vertex)
-                    rp.setTexture(texture: albedo, index: 0, stages: .fragment)
-                    rp.drawIndexed(primitimeType: .triangle, buffer: model.indexBuffer, indexCount: Int(instance.indexCount), indexOffset: UInt64(instance.indexOffset))
+                        rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<ModelData>.size, stages: .vertex)
+                        rp.setBuffer(buf: model.vertexBuffer, index: 1, stages: .vertex)
+                        rp.setTexture(texture: albedo, index: 0, stages: .fragment)
+                        rp.drawIndexed(primitimeType: .triangle, buffer: model.indexBuffer, indexCount: Int(instance.indexCount), indexOffset: UInt64(instance.indexOffset))
+                    }
                 }
             }
         }

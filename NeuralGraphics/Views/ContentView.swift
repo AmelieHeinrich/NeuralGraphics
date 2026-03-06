@@ -314,14 +314,17 @@ private struct SideColumn: View {
     }
 }
 
+// MARK: - App Phase
+
+enum AppPhase {
+    case start
+    case loading(SceneDescriptor)
+    case rendering(RenderScene)
+}
+
 // MARK: - AppState
 
-/// Owns both RendererSettings and Renderer so they share the same settings
-/// reference from construction — avoids the @State closure / @StateObject
-/// timing problem in ContentView.
 private class AppState: ObservableObject {
-    var objectWillChange: ObservableObjectPublisher
-    
     let settings: RendererSettings
     let renderer: Renderer
 
@@ -332,34 +335,26 @@ private class AppState: ObservableObject {
         let s = RendererSettings()
         self.settings = s
         self.renderer = Renderer(device: device, settings: s)
-        self.objectWillChange = ObservableObjectPublisher()
     }
 }
 
-// MARK: - ContentView
+// MARK: - Render View
 
-struct ContentView: View {
-
-    @StateObject private var appState  = AppState()
-    @StateObject private var sceneLoader = SceneLoader()
+private struct RenderView: View {
+    @ObservedObject var appState: AppState
+    let scene: RenderScene
 
     @State private var isHUDExpanded: Bool = false
     @State private var activePanels: Set<String> = []
 
     var body: some View {
         ZStack {
-            // Full-screen Metal render view (always present; renders a clear
-            // colour until the mesh is ready)
             MetalView(delegate: appState.renderer)
                 .ignoresSafeArea()
 
-            // Left column (Training / About)
-            SideColumn(side: .left, settings: appState.settings, activePanels: $activePanels)
-
-            // Right column (Stats / Settings)
+            SideColumn(side: .left,  settings: appState.settings, activePanels: $activePanels)
             SideColumn(side: .right, settings: appState.settings, activePanels: $activePanels)
 
-            // Bottom HUD
             VStack {
                 Spacer()
 
@@ -379,9 +374,7 @@ struct ContentView: View {
 
                 if !isHUDExpanded {
                     RevealButton {
-                        withAnimation(panelAnimation) {
-                            isHUDExpanded = true
-                        }
+                        withAnimation(panelAnimation) { isHUDExpanded = true }
                     }
                     .transition(
                         .asymmetric(
@@ -392,26 +385,68 @@ struct ContentView: View {
                 }
             }
             .padding(.bottom, 18)
-
-            // Startup loading overlay — fades out once the mesh is ready
-            if !sceneLoader.isLoaded {
-                LoadingView(progress: sceneLoader.progress, status: sceneLoader.status)
-                    .transition(.opacity.animation(.easeOut(duration: 0.6)))
-                    .zIndex(10)
-            }
         }
         .onAppear {
-            guard let url = Bundle.main.url(forResource: "bistro_ext", withExtension: ".bin") else {
-                fatalError("Model not in bundle")
-            }
-            sceneLoader.beginLoading(url: url)
+            appState.renderer.setScene(scene)
         }
-        .onChange(of: sceneLoader.isLoaded) { loaded in
-            if loaded, let mesh = sceneLoader.mesh {
-                withAnimation(.easeOut(duration: 0.6)) {
-                    appState.renderer.setModel(mesh)
+    }
+}
+
+// MARK: - ContentView
+
+struct ContentView: View {
+    @StateObject private var appState    = AppState()
+    @StateObject private var sceneLoader = SceneLoader()
+
+    @State private var phase: AppPhase = .start
+
+    var body: some View {
+        ZStack {
+            switch phase {
+
+            case .start:
+                StartView { config in
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        phase = .loading(config.descriptor)
+                    }
                 }
+                .transition(.opacity)
+                .zIndex(0)
+
+            case .loading(let descriptor):
+                ZStack {
+                    MetalView(delegate: appState.renderer)
+                        .ignoresSafeArea()
+                    LoadingView(progress: sceneLoader.progress, status: sceneLoader.status)
+                        .zIndex(10)
+                }
+                .transition(.opacity)
+                .zIndex(1)
+                .onAppear {
+                    sceneLoader.beginLoading(descriptor: descriptor)
+                }
+                .onChange(of: sceneLoader.isLoaded) { loaded in
+                    if loaded, let scene = sceneLoader.scene {
+                        withAnimation(.easeOut(duration: 0.6)) {
+                            phase = .rendering(scene)
+                        }
+                    }
+                }
+
+            case .rendering(let scene):
+                RenderView(appState: appState, scene: scene)
+                    .transition(.opacity)
+                    .zIndex(2)
             }
+        }
+        .animation(.easeInOut(duration: 0.4), value: phaseKey)
+    }
+
+    private var phaseKey: Int {
+        switch phase {
+        case .start:     return 0
+        case .loading:   return 1
+        case .rendering: return 2
         }
     }
 }

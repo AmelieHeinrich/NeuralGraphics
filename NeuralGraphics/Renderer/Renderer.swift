@@ -48,8 +48,8 @@ class Renderer: NSObject, MetalViewDelegate {
         self.frameManager = FrameManager(settings: settings)
     }
 
-    func setModel(_ mesh: Mesh) {
-        frameManager.setModel(mesh)
+    func setScene(_ scene: RenderScene) {
+        frameManager.setScene(scene)
     }
 
     func configure(_ view: MTKView) {
