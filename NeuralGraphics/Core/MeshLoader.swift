@@ -367,10 +367,10 @@ class MeshLoader {
         }
 
         // ---- Commit residency ----
-        // if RendererData.device.supportsFamily(.apple9) {
-        //     mesh.blas = BLAS(model: mesh, makeResidentNow: false)
-        //     mesh.blas.setName(name: "\(name) BLAS")
-        // }
+        if RendererData.device.supportsFamily(.apple9) {
+            mesh.blas = BLAS(model: mesh, makeResidentNow: false)
+            mesh.blas.setName(name: "\(name) BLAS")
+        }
 
         mesh.vertexBuffer.makeResident()
         mesh.instanceBuffer.makeResident()
@@ -381,22 +381,7 @@ class MeshLoader {
             lod.meshletTrianglesBuffer.makeResident()
             lod.meshletBoundsBuffer.makeResident()
         }
-        // mesh.blas?.makeResident()
-
-        // progress?(0.95, "Building BLAS…")
-        // if RendererData.device.supportsFamily(.apple9) {
-        //     let commandBuffer = CommandBuffer()
-        //     commandBuffer.begin(commitResidencySet: false)
-        //     let cp = commandBuffer.beginComputePass()
-        //     cp.buildBLAS(blas: mesh.blas)
-        //     cp.end()
-        //     commandBuffer.end()
-        //     commandBuffer.commit()
-//
-        //     RendererData.waitIdle()
-//
-        //     mesh.blas.destroyScratch()
-        // }
+        mesh.blas?.makeResident()
 
         progress?(1.00, "Done")
         print(
