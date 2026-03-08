@@ -291,7 +291,7 @@ class DebugPass: Pass {
         defer { vertices.removeAll(keepingCapacity: true) }
         guard !vertices.isEmpty else { return }
 
-        let buf      = vertexBuffers[context.frameIndex]
+        let buf = vertexBuffers[context.frameIndex]
         let byteSize = vertices.count * MemoryLayout<DebugVertex>.stride
         vertices.withUnsafeBytes { ptr in
             buf.write(bytes: ptr.baseAddress!, size: byteSize)
@@ -310,12 +310,11 @@ class DebugPass: Pass {
         var data = DebugData(camera: context.camera.viewProjection)
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-        rp.waitFenceBeforeStage(stage: .vertex)
+        rp.consumerBarrier(before: .vertex, after: .fragment)
         rp.setPipeline(pipeline: depthTex != nil ? pipelineDepth : pipelineNoDepth)
         rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<DebugData>.size, stages: .vertex)
         rp.setBuffer(buf: buf, index: 1, stages: .vertex)
         rp.draw(primitiveType: .line, vertexCount: vertices.count, vertexOffset: 0)
-        rp.signalFenceAfterStage(stage: .fragment)
         rp.end()
     }
 }

@@ -36,12 +36,11 @@ class TonemapPass: Pass {
         rpDesc.addAttachment(texture: context.drawable.texture, shouldClear: false)
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-        rp.waitFenceBeforeStage(stage: .vertex)
+        rp.consumerBarrier(before: .vertex, after: .fragment)
         rp.setPipeline(pipeline: self.pipeline)
         rp.setTexture(texture: forward, index: 0, stages: .fragment)
         rp.setBytes(allocator: context.allocator, index: 0, bytes: &gamma, size: MemoryLayout<Float>.size, stages: .fragment)
         rp.draw(primitiveType: .triangle, vertexCount: 3, vertexOffset: 0)
-        rp.signalFenceAfterStage(stage: .fragment)
         rp.end()
     }
 }

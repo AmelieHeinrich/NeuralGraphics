@@ -17,6 +17,7 @@ class ForwardPass: Pass {
     private let icbResetPipe: ComputePipeline
     private let vertexICB: ICB
     private let meshICB: ICB
+    private let instanceIDBuffer: Buffer
 
     private var depthTexture: Texture
     private var colorTexture: Texture
@@ -28,7 +29,7 @@ class ForwardPass: Pass {
         self.icbResetPipe = ComputePipeline(function: "reset_icb")
         self.vertexCullPipe = ComputePipeline(function: "vertex_geometry_cull")
         self.meshCullPipe = ComputePipeline(function: "mesh_geometry_cull")
-        self.vertexICB = ICB(inherit: true, commandTypes: .drawIndexed, maxCommandCount: 8092)
+        self.vertexICB = ICB(inherit: false, commandTypes: .drawIndexed, maxCommandCount: 8092)
         self.vertexICB.setName(label: "Vertex Forward ICB")
         self.meshICB = ICB(inherit: false, commandTypes: .drawMeshThreadgroups, maxCommandCount: 8092)
         self.meshICB.setName(label: "Mesh Forward ICB")
@@ -71,6 +72,9 @@ class ForwardPass: Pass {
         let depth = Texture(descriptor: depthDesc)
         depth.setLabel(name: "Forward Depth Buffer")
         self.depthTexture = depth
+        
+        self.instanceIDBuffer = Buffer(size: 8092 * MemoryLayout<UInt32>.size)
+        self.instanceIDBuffer.setName(name: "Instance ID Buffer (Mesh ICB")
 
         super.init()
     }
@@ -89,7 +93,7 @@ class ForwardPass: Pass {
             return
         }
         if settings.useMeshShader {
-            meshPathMTL3(context: context)
+            meshPathMTL4(context: context)
         } else {
             vertexPath(context: context)
         }
@@ -121,16 +125,13 @@ class ForwardPass: Pass {
         cp.setBuffer(buf: vertexICB.buffer, index: 1)
         cp.setBytes(allocator: context.allocator, index: 2, bytes: &instanceCount, size: MemoryLayout<UInt32>.size)
         cp.dispatch(threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
-        cp.signalFenceAfterStage(stage: .dispatch)
         cp.end()
 
         // Flush
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-        rp.waitFenceBeforeStage(stage: .vertex)
+        rp.consumerBarrier(before: .vertex, after: .dispatch)
         rp.setPipeline(pipeline: pipeline)
-        rp.setBuffer(buf: context.sceneBuffer.buffer, index: 0, stages: [.vertex, .fragment])
         rp.executeIndirect(icb: vertexICB, maxCommandCount: 8092)
-        rp.signalFenceAfterStage(stage: .fragment)
         rp.end()
     }
     
@@ -174,6 +175,7 @@ class ForwardPass: Pass {
         rp.waitForFence(RendererData.gpuTimeline.fence, before: .object)
         rp.setRenderPipelineState(meshPipeline.pipelineState)
         rp.executeCommandsInBuffer(meshICB.cmdBuffer, range: 0..<8092)
+        rp.updateFence(RendererData.gpuTimeline.fence, after: .fragment)
         rp.endEncoding()
         
         RendererData.mtl3commandBuffer.commit()
@@ -185,7 +187,8 @@ class ForwardPass: Pass {
         var instanceCount = context.sceneBuffer.instanceCount
         let resetTgCountX = (Int(maxInstanceCount) + 63) / 64
         let cullTgCountX = (Int(instanceCount) + 63) / 64
-        let offset = context.allocator.allocate(size: MemoryLayout<UInt32>.size * 8092)
+        
+        memset(instanceIDBuffer.contents(), 0, MemoryLayout<UInt32>.size * 8092)
         
         var rpDesc = RenderPassDescriptor()
         rpDesc.addAttachment(texture: self.colorTexture)
@@ -202,15 +205,35 @@ class ForwardPass: Pass {
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
         cp.setBuffer(buf: meshICB.buffer, index: 1)
         cp.setBytes(allocator: context.allocator, index: 2, bytes: &instanceCount, size: MemoryLayout<UInt32>.size)
-        cp.setBuffer(buf: context.allocator.buffer, index: 3, offset: offset)
+        cp.setBuffer(buf: instanceIDBuffer, index: 3)
         cp.dispatch(threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
-        cp.signalFenceAfterStage(stage: .dispatch)
+        cp.producerBarrier(before: .object, after: .dispatch)
         cp.end()
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-        rp.waitFenceBeforeStage(stage: .object)
+        rp.consumerBarrier(before: .object, after: .dispatch)
         rp.setMeshPipeline(pipeline: meshPipeline)
         rp.executeIndirect(icb: meshICB, maxCommandCount: 8092)
+        //rp.setBuffer(buf: context.sceneBuffer.buffer, index: 0, stages: [.mesh, .object, .fragment])
+        //var globalInstanceIdx: UInt32 = 0
+        //if let scene = context.scene {
+        //    for entity in scene.entities {
+        //        let model = entity.mesh
+        //        let lod = min(settings.forcedLOD, model.lodCount - 1)
+////
+        //        for instance in model.instances {
+        //            let tgCountX = Int(instance.meshletCount[lod] / 32) + 1
+////
+        //            rp.setBytes(allocator: context.allocator, index: 1, bytes: &globalInstanceIdx, size: MemoryLayout<UInt32>.size, stages: .object)
+        //            rp.dispatchMesh(
+        //                threadgroupsPerGrid: MTLSizeMake(tgCountX, 1, 1),
+        //                threadsPerObjectThreadgroup: MTLSizeMake(32, 1, 1),
+        //                threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1))
+////
+        //            globalInstanceIdx += 1
+        //        }
+        //    }
+        //}
         rp.end()
     }
 }

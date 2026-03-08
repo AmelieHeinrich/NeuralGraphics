@@ -16,6 +16,11 @@ class ICB {
         descriptor.commandTypes = commandTypes
         descriptor.inheritBuffers = inherit
         descriptor.inheritPipelineState = true
+        descriptor.maxVertexBufferBindCount = 16
+        descriptor.maxFragmentBufferBindCount = 16
+        descriptor.maxMeshBufferBindCount = 16
+        descriptor.maxKernelBufferBindCount = 16
+        descriptor.maxObjectThreadgroupMemoryBindCount = 16
         
         self.cmdBuffer = RendererData.device.makeIndirectCommandBuffer(descriptor: descriptor, maxCommandCount: maxCommandCount)!
         

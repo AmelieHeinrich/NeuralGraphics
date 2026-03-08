@@ -14,7 +14,6 @@ using namespace metal;
 
 struct Payload {
     uint InstanceIndex;
-    uint MeshletIndices[AS_GROUP_SIZE];
 };
 
 struct MSOut {
@@ -30,14 +29,18 @@ using MeshOutput = metal::mesh<MSOut, void, 64, 128, topology::triangle>;
 
 [[object]]
 void forward_os(const device SceneBuffer& scene [[buffer(0)]],
-                const device uint& instanceIndex [[buffer(1)]],
+                const device uint* instanceIndex [[buffer(1)]],
                 uint gtid [[thread_position_in_threadgroup]],
-                uint gid [[threadgroup_position_in_grid]],
                 object_data Payload& outPayload [[payload]],
                 mesh_grid_properties outGrid) {
-    outPayload.MeshletIndices[gtid] = gtid;
-    outPayload.InstanceIndex = instanceIndex;
-    outGrid.set_threadgroups_per_grid(uint3(AS_GROUP_SIZE, 1, 1));
+    if (gtid == 0) {
+        uint instance = *instanceIndex;
+        SceneInstance inst = scene.Instances[instance];
+        SceneInstanceLOD lod = inst.LODs[0];
+        outPayload.InstanceIndex = instance;
+
+        outGrid.set_threadgroups_per_grid(uint3(lod.MeshletCount, 1, 1));
+    }
 }
 
 [[mesh]]
@@ -47,35 +50,29 @@ void forward_ms(const device SceneBuffer& scene [[buffer(0)]],
                 uint gid [[threadgroup_position_in_grid]],
                 MeshOutput outMesh) {
     uint instanceIndex = payload.InstanceIndex;
+    uint meshletIndex = gid;
+    
     SceneInstance inst = scene.Instances[instanceIndex];
     SceneEntity entity = scene.Entities[inst.EntityIndex];
     SceneInstanceLOD lod = inst.LODs[0];
 
-    uint meshletIndex = payload.MeshletIndices[gid];
-    if (meshletIndex >= lod.MeshletCount) {
-        outMesh.set_primitive_count(0);
-        return;
-    }
+    if (meshletIndex >= lod.MeshletCount) return;
 
     MeshMeshlet m = lod.Meshlets[meshletIndex];
     outMesh.set_primitive_count(m.TriangleCount);
 
+    // --- Index Processing ---
     if (gtid < m.TriangleCount) {
         uint triBase = m.TriangleOffset + gtid * 3;
-        uint vIdx0 = lod.MeshletTriangles[triBase + 0];
-        uint vIdx1 = lod.MeshletTriangles[triBase + 1];
-        uint vIdx2 = lod.MeshletTriangles[triBase + 2];
-
-        uint triIdx = 3 * gtid;
-        outMesh.set_index(triIdx + 0, vIdx0);
-        outMesh.set_index(triIdx + 1, vIdx1);
-        outMesh.set_index(triIdx + 2, vIdx2);
+        outMesh.set_index(gtid * 3 + 0, lod.MeshletTriangles[triBase + 0]);
+        outMesh.set_index(gtid * 3 + 1, lod.MeshletTriangles[triBase + 1]);
+        outMesh.set_index(gtid * 3 + 2, lod.MeshletTriangles[triBase + 2]);
     }
 
+    // --- Vertex Processing ---
     if (gtid < m.VertexCount) {
         uint vertexIndex = m.VertexOffset + gtid;
         MeshVertex v = lod.MeshletVertices[vertexIndex];
-
         float4 worldPos = entity.Transform * float4(v.Position, 1.0f);
 
         MSOut vtx;
@@ -93,24 +90,24 @@ void forward_ms(const device SceneBuffer& scene [[buffer(0)]],
 [[fragment]]
 float4 forward_msfs(MSOut in [[stage_in]],
                     const device SceneBuffer& scene [[buffer(0)]]) {
-    constexpr sampler textureSampler(
-        mag_filter::linear,
-        min_filter::linear,
-        mip_filter::linear,
-        address::repeat,
-        lod_clamp(0.0f, MAXFLOAT)
-    );
+    //  constexpr sampler textureSampler(
+    //      mag_filter::linear,
+    //      min_filter::linear,
+    //      mip_filter::linear,
+    //      address::repeat,
+    //      lod_clamp(0.0f, MAXFLOAT)
+    //  );
 
-    SceneInstance inst = scene.Instances[in.InstanceIndex];
-    SceneMaterial mat  = scene.Materials[inst.MaterialIndex];
+    //SceneInstance inst = scene.Instances[in.InstanceIndex];
+    //SceneMaterial mat  = scene.Materials[inst.MaterialIndex];
+//
+    //float4 color = float4(1.0f);
+    //if (mat.hasAlbedo()) {
+    //    color = mat.Albedo.sample(textureSampler, in.UV);
+    //}
+//
+    //if (color.a < 0.25f)
+    //    discard_fragment();
 
-    float4 color = float4(1.0f);
-    if (mat.hasAlbedo()) {
-        color = mat.Albedo.sample(textureSampler, in.UV);
-    }
-
-    if (color.a < 0.25f)
-        discard_fragment();
-
-    return color;
+    return float4(in.Normal, 1.0);
 }
