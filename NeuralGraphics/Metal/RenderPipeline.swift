@@ -44,6 +44,7 @@ class RenderPipeline {
         }
         
         let pipelineDesc = MTL4RenderPipelineDescriptor()
+        pipelineDesc.supportIndirectCommandBuffers = descriptor.supportsIndirect ? .enabled : .disabled
         pipelineDesc.label = descriptor.name
         pipelineDesc.vertexFunctionDescriptor = vertexFunctionDescriptor
         if descriptor.fragmentFunction != nil {

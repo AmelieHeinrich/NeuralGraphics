@@ -8,70 +8,42 @@
 import Metal
 import simd
 
-// =============================================================================
-// GPU struct mirrors — these must match Bindless.h exactly in size and layout.
-// Metal 4: we write gpuAddress (UInt64) for buffer pointers and
-// MTLResourceID._impl (UInt64) for texture handles directly into the buffer.
-// =============================================================================
-
-// MARK: - GPU Struct: SceneCamera (416 bytes)
-
 private struct GPUSceneCamera {
-    var view: simd_float4x4  // 64  offset 0
-    var projection: simd_float4x4  // 64  offset 64
-    var viewProjection: simd_float4x4  // 64  offset 128
-    var inverseView: simd_float4x4  // 64  offset 192
-    var inverseProjection: simd_float4x4  // 64  offset 256
-    var inverseViewProjection: simd_float4x4  // 64  offset 320
-    var position: SIMD4<Float>  // 16  offset 384  (.xyz = position, .w = near)
-    var direction: SIMD4<Float>  // 16  offset 400  (.xyz = direction, .w = far)
-    // Metal float3 + float packs into 16 bytes but Swift SIMD3<Float> + Float
-    // leaves a 12-byte gap before the next 16-byte-aligned member, misaligning
-    // everything after the camera. Using SIMD4 and packing near/far into .w
-    // guarantees the struct is exactly 416 bytes with no padding surprises.
+    var view: simd_float4x4
+    var projection: simd_float4x4
+    var viewProjection: simd_float4x4
+    var inverseView: simd_float4x4
+    var inverseProjection: simd_float4x4
+    var inverseViewProjection: simd_float4x4
+    var position: simd_float4
+    var direction: simd_float4
 }
 
-// MARK: - GPU Struct: SceneMaterial (48 bytes)
-// 4 texture resource IDs (8 bytes each) + flags + 3 padding uints
-
 private struct GPUSceneMaterial {
-    var albedoID: UInt64  // MTLResourceID._impl
+    var albedoID: UInt64
     var normalID: UInt64
     var ormID: UInt64
     var emissiveID: UInt64
     var flags: UInt32
-    var _pad0: UInt32
-    var _pad1: UInt32
-    var _pad2: UInt32
 }
 
-// MARK: - GPU Struct: SceneInstanceLOD (48 bytes)
-// 5 addresses (8 bytes each) + 4 uints
-
 private struct GPUSceneInstanceLOD {
-    var indexBuffer: UInt64  // gpuAddress
+    var indexBuffer: UInt64
     var meshlets: UInt64
     var meshletVertices: UInt64
     var meshletTriangles: UInt64
     var meshletBounds: UInt64
     var indexCount: UInt32
     var meshletCount: UInt32
-    var _pad0: UInt32
-    var _pad1: UInt32
 }
 
-// MARK: - GPU Struct: SceneInstance
-// vertexBuffer(8) + materialIndex(4) + entityIndex(4) + lodCount(4) +
-// aabbMin(12) + aabbMax(12) + pad(4) + LODs[5] * 48
-
 private struct GPUSceneInstance {
-    var vertexBuffer: UInt64  // gpuAddress (with vertex offset applied)
+    var vertexBuffer: UInt64
     var materialIndex: UInt32
     var entityIndex: UInt32
     var lodCount: UInt32
-    var aabbMin: SIMD3<Float>
-    var aabbMax: SIMD3<Float>
-    var _pad0: UInt32
+    var aabbMin: simd_float3
+    var aabbMax: simd_float3
     var lod0: GPUSceneInstanceLOD
     var lod1: GPUSceneInstanceLOD
     var lod2: GPUSceneInstanceLOD
@@ -79,29 +51,19 @@ private struct GPUSceneInstance {
     var lod4: GPUSceneInstanceLOD
 }
 
-// MARK: - GPU Struct: SceneEntity (64 bytes)
-
 private struct GPUSceneEntity {
     var transform: simd_float4x4
 }
-
-// MARK: - GPU Struct: SceneBuffer (root)
-// Camera + counts + 3 pointers
 
 private struct GPUSceneBufferHeader {
     var camera: GPUSceneCamera
     var materialCount: UInt32
     var instanceCount: UInt32
     var entityCount: UInt32
-    var _pad0: UInt32
-    var materialsPtr: UInt64  // gpuAddress → SceneMaterial[]
-    var instancesPtr: UInt64  // gpuAddress → SceneInstance[]
-    var entitiesPtr: UInt64  // gpuAddress → SceneEntity[]
+    var materialsPtr: UInt64
+    var instancesPtr: UInt64
+    var entitiesPtr: UInt64
 }
-
-// =============================================================================
-// SceneBufferBuilder — builds the GPU scene buffer from the RenderScene
-// =============================================================================
 
 class SceneBufferBuilder {
 
@@ -176,7 +138,7 @@ class SceneBufferBuilder {
                 matPtr[matIdx] = GPUSceneMaterial(
                     albedoID: albedoID, normalID: normalID,
                     ormID: ormID, emissiveID: emissiveID,
-                    flags: flags, _pad0: 0, _pad1: 0, _pad2: 0)
+                    flags: flags)
                 matIdx += 1
             }
         }
@@ -237,15 +199,13 @@ class SceneBufferBuilder {
                                 meshletTriangles: mtAddr,
                                 meshletBounds: boundsAddr,
                                 indexCount: instance.indexCount[lod],
-                                meshletCount: instance.meshletCount[lod],
-                                _pad0: 0, _pad1: 0))
+                                meshletCount: instance.meshletCount[lod]))
                     } else {
                         lods.append(
                             GPUSceneInstanceLOD(
                                 indexBuffer: 0, meshlets: 0,
                                 meshletVertices: 0, meshletTriangles: 0, meshletBounds: 0,
-                                indexCount: 0, meshletCount: 0,
-                                _pad0: 0, _pad1: 0))
+                                indexCount: 0, meshletCount: 0))
                     }
                 }
 
@@ -256,7 +216,6 @@ class SceneBufferBuilder {
                     lodCount: UInt32(mesh.lodCount),
                     aabbMin: instance.aabbMin,
                     aabbMax: instance.aabbMax,
-                    _pad0: 0,
                     lod0: lods[0], lod1: lods[1], lod2: lods[2],
                     lod3: lods[3], lod4: lods[4])
                 instIdx += 1
@@ -308,7 +267,6 @@ class SceneBufferBuilder {
         ptr.pointee.materialCount = UInt32(materialCount)
         ptr.pointee.instanceCount = UInt32(instanceCount)
         ptr.pointee.entityCount = UInt32(entityCount)
-        ptr.pointee._pad0 = 0
         ptr.pointee.materialsPtr = materialsBuffer.getAddress()
         ptr.pointee.instancesPtr = instancesBuffer.getAddress()
         ptr.pointee.entitiesPtr = entitiesBuffer.getAddress()

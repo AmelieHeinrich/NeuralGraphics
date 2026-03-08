@@ -55,6 +55,9 @@ class FrameManager {
     func setScene(_ scene: RenderScene) {
         self.scene = scene
         self.sceneBuffer.build(scene: scene)
+        RendererData.residencySet.commit()
+        
+        RendererData.waitIdle()
     }
 
     func resize(width: Int, height: Int) {

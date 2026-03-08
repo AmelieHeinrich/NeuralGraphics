@@ -5,19 +5,15 @@
 //  Created by Amélie Heinrich on 03/03/2026.
 //
 
-#include "Common/Bindless.h"
+#include "../Common/Bindless.h"
 
 #include <metal_stdlib>
 using namespace metal;
 
 #define AS_GROUP_SIZE 32
 
-struct ForwardPushConstants {
-    uint InstanceIndex;
-    uint LOD;
-};
-
 struct Payload {
+    uint InstanceIndex;
     uint MeshletIndices[AS_GROUP_SIZE];
 };
 
@@ -27,30 +23,33 @@ struct MSOut {
     float3 Normal;
     float3 WorldPos;
     float4 Tangent;
-    uint   InstanceIndex [[flat]];
+    uint InstanceIndex [[flat]];
 };
 
 using MeshOutput = metal::mesh<MSOut, void, 64, 128, topology::triangle>;
 
 [[object]]
-void forward_os(uint                 gtid       [[thread_position_in_threadgroup]],
-                uint                 dtid       [[thread_position_in_grid]],
+void forward_os(const device SceneBuffer& scene [[buffer(0)]],
+                const device uint& instanceIndex [[buffer(1)]],
+                uint gtid [[thread_position_in_threadgroup]],
+                uint gid [[threadgroup_position_in_grid]],
                 object_data Payload& outPayload [[payload]],
                 mesh_grid_properties outGrid) {
-    outPayload.MeshletIndices[gtid] = dtid;
+    outPayload.MeshletIndices[gtid] = gtid;
+    outPayload.InstanceIndex = instanceIndex;
     outGrid.set_threadgroups_per_grid(uint3(AS_GROUP_SIZE, 1, 1));
 }
 
 [[mesh]]
 void forward_ms(const device SceneBuffer& scene [[buffer(0)]],
-                const device ForwardPushConstants& push [[buffer(1)]],
                 object_data const Payload& payload [[payload]],
                 uint gtid [[thread_position_in_threadgroup]],
                 uint gid [[threadgroup_position_in_grid]],
                 MeshOutput outMesh) {
-    SceneInstance inst = scene.Instances[push.InstanceIndex];
+    uint instanceIndex = payload.InstanceIndex;
+    SceneInstance inst = scene.Instances[instanceIndex];
     SceneEntity entity = scene.Entities[inst.EntityIndex];
-    SceneInstanceLOD lod = inst.LODs[push.LOD];
+    SceneInstanceLOD lod = inst.LODs[0];
 
     uint meshletIndex = payload.MeshletIndices[gid];
     if (meshletIndex >= lod.MeshletCount) {
@@ -85,7 +84,7 @@ void forward_ms(const device SceneBuffer& scene [[buffer(0)]],
         vtx.Normal        = normalize((entity.Transform * float4(v.Normal, 0.0f)).xyz);
         vtx.WorldPos      = worldPos.xyz;
         vtx.Tangent       = v.Tangent;
-        vtx.InstanceIndex = push.InstanceIndex;
+        vtx.InstanceIndex = instanceIndex;
 
         outMesh.set_vertex(gtid, vtx);
     }

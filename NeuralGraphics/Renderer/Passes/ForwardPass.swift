@@ -9,21 +9,29 @@ import Metal
 internal import QuartzCore
 import simd
 
-// Must match ForwardPushConstants in Model.metal / ModelMS.metal
-private struct ForwardPushConstants {
-    var instanceIndex: UInt32
-    var lod: UInt32
-}
-
 class ForwardPass: Pass {
     private let pipeline: RenderPipeline
     private let meshPipeline: MeshPipeline
+    private let vertexCullPipe: ComputePipeline
+    private let meshCullPipe: ComputePipeline
+    private let icbResetPipe: ComputePipeline
+    private let vertexICB: ICB
+    private let meshICB: ICB
+
     private var depthTexture: Texture
     private var colorTexture: Texture
     private unowned let settings: RendererSettings
 
     init(settings: RendererSettings) {
         self.settings = settings
+
+        self.icbResetPipe = ComputePipeline(function: "reset_icb")
+        self.vertexCullPipe = ComputePipeline(function: "vertex_geometry_cull")
+        self.meshCullPipe = ComputePipeline(function: "mesh_geometry_cull")
+        self.vertexICB = ICB(inherit: true, commandTypes: .drawIndexed, maxCommandCount: 8092)
+        self.vertexICB.setName(label: "Vertex Forward ICB")
+        self.meshICB = ICB(inherit: false, commandTypes: .drawMeshThreadgroups, maxCommandCount: 8092)
+        self.meshICB.setName(label: "Mesh Forward ICB")
 
         var meshPipelineDesc = MeshPipelineDescriptor()
         meshPipelineDesc.name = "Forward Pipeline (Mesh)"
@@ -34,6 +42,7 @@ class ForwardPass: Pass {
         meshPipelineDesc.depthFormat = .depth32Float
         meshPipelineDesc.depthEnabled = true
         meshPipelineDesc.depthWriteEnabled = true
+        meshPipelineDesc.supportsIndirect = true
         self.meshPipeline = MeshPipeline(descriptor: meshPipelineDesc)
 
         var pipelineDesc = RenderPipelineDescriptor()
@@ -44,6 +53,7 @@ class ForwardPass: Pass {
         pipelineDesc.depthFormat = .depth32Float
         pipelineDesc.depthEnabled = true
         pipelineDesc.depthWriteEnabled = true
+        pipelineDesc.supportsIndirect = true
         self.pipeline = RenderPipeline(descriptor: pipelineDesc)
 
         // Color buffer
@@ -71,90 +81,136 @@ class ForwardPass: Pass {
     }
 
     override func render(context: FrameContext) {
-        var rpDesc = RenderPassDescriptor()
-        rpDesc.addAttachment(texture: self.colorTexture)
-        rpDesc.setDepthAttachment(texture: depthTexture)
-        rpDesc.name = "Forward Pass"
-
-        let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
         let sb = context.sceneBuffer
 
         guard sb.buffer != nil, sb.instanceCount > 0 else {
-            rp.producerBarrier(before: .dispatch, after: .fragment)
-            rp.end()
             context.resources.register(colorTexture, for: "Forward.Color")
             context.resources.register(depthTexture, for: "Forward.Depth")
             return
         }
-
         if settings.useMeshShader {
-            rp.setMeshPipeline(pipeline: meshPipeline)
-
-            // Bind scene buffer once for mesh + object + fragment stages
-            rp.setBuffer(buf: sb.buffer, index: 0, stages: [.mesh, .object, .fragment])
-
-            var globalInstanceIdx: UInt32 = 0
-            if let scene = context.scene {
-                for entity in scene.entities {
-                    let model = entity.mesh
-                    let lod = min(settings.forcedLOD, model.lodCount - 1)
-
-                    for instance in model.instances {
-                        var push = ForwardPushConstants(
-                            instanceIndex: globalInstanceIdx,
-                            lod: UInt32(lod))
-
-                        let tgCountX = Int(instance.meshletCount[lod] / 32) + 1
-
-                        rp.setBytes(
-                            allocator: context.allocator, index: 1, bytes: &push,
-                            size: MemoryLayout<ForwardPushConstants>.size, stages: .mesh)
-                        rp.dispatchMesh(
-                            threadgroupsPerGrid: MTLSizeMake(tgCountX, 1, 1),
-                            threadsPerObjectThreadgroup: MTLSizeMake(32, 1, 1),
-                            threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1))
-
-                        globalInstanceIdx += 1
-                    }
-                }
-            }
+            meshPathMTL3(context: context)
         } else {
-            rp.setPipeline(pipeline: pipeline)
-
-            // Bind scene buffer once for vertex + fragment stages
-            rp.setBuffer(buf: sb.buffer, index: 0, stages: [.vertex, .fragment])
-
-            var globalInstanceIdx: UInt32 = 0
-            if let scene = context.scene {
-                for entity in scene.entities {
-                    let model = entity.mesh
-                    let lod = min(settings.forcedLOD, model.lodCount - 1)
-                    let lodData = model.lods[lod]
-
-                    for instance in model.instances {
-                        var push = ForwardPushConstants(
-                            instanceIndex: globalInstanceIdx,
-                            lod: UInt32(lod))
-
-                        rp.setBytes(
-                            allocator: context.allocator, index: 1, bytes: &push,
-                            size: MemoryLayout<ForwardPushConstants>.size, stages: .vertex)
-                        rp.drawIndexed(
-                            primitimeType: .triangle, buffer: lodData.indexBuffer,
-                            indexCount: Int(instance.indexCount[lod]),
-                            indexOffset: UInt64(instance.indexOffset[lod]))
-
-                        globalInstanceIdx += 1
-                    }
-                }
-            }
+            vertexPath(context: context)
         }
-
-        rp.producerBarrier(before: .dispatch, after: .fragment)
-        rp.end()
 
         // Publish outputs so downstream passes and controllers can consume them
         context.resources.register(colorTexture, for: "Forward.Color")
         context.resources.register(depthTexture, for: "Forward.Depth")
+    }
+
+    func vertexPath(context: FrameContext) {
+        var maxInstanceCount = 8092
+        var instanceCount = context.sceneBuffer.instanceCount
+        let resetTgCountX = (Int(maxInstanceCount) + 63) / 64
+        let cullTgCountX = (Int(instanceCount) + 63) / 64
+        var rpDesc = RenderPassDescriptor()
+        rpDesc.addAttachment(texture: self.colorTexture)
+        rpDesc.setDepthAttachment(texture: depthTexture)
+        rpDesc.name = "Forward Pass"
+        
+        // Cull
+        let cp = context.cmdBuffer.beginComputePass(name: "Reset & Cull Instances")
+        cp.setPipeline(pipeline: icbResetPipe)
+        cp.setBuffer(buf: vertexICB.buffer, index: 0)
+        cp.setBytes(allocator: context.allocator, index: 1, bytes: &maxInstanceCount, size: MemoryLayout<Int>.size)
+        cp.dispatch(threads: MTLSizeMake(resetTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.intraPassBarrier(before: .dispatch, after: .dispatch)
+        cp.setPipeline(pipeline: vertexCullPipe)
+        cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
+        cp.setBuffer(buf: vertexICB.buffer, index: 1)
+        cp.setBytes(allocator: context.allocator, index: 2, bytes: &instanceCount, size: MemoryLayout<UInt32>.size)
+        cp.dispatch(threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.signalFenceAfterStage(stage: .dispatch)
+        cp.end()
+
+        // Flush
+        let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
+        rp.waitFenceBeforeStage(stage: .vertex)
+        rp.setPipeline(pipeline: pipeline)
+        rp.setBuffer(buf: context.sceneBuffer.buffer, index: 0, stages: [.vertex, .fragment])
+        rp.executeIndirect(icb: vertexICB, maxCommandCount: 8092)
+        rp.signalFenceAfterStage(stage: .fragment)
+        rp.end()
+    }
+    
+    func meshPathMTL3(context: FrameContext) {
+        var instanceCount = context.sceneBuffer.instanceCount
+        let cullTgCountX = (Int(instanceCount) + 63) / 64
+        let offset = context.allocator.allocate(size: MemoryLayout<UInt32>.size * 8092)
+        
+        RendererData.mtl3commandBuffer = RendererData.mtl3commandQueue.makeCommandBuffer()
+        RendererData.mtl3commandBuffer.useResidencySet(RendererData.residencySet)
+
+        // Cull
+        let bp = RendererData.mtl3commandBuffer.makeBlitCommandEncoder()!
+        bp.resetCommandsInBuffer(meshICB.cmdBuffer, range: 0..<8092)
+        bp.updateFence(RendererData.gpuTimeline.fence)
+        bp.endEncoding()
+        
+        let cp = RendererData.mtl3commandBuffer.makeComputeCommandEncoder()!
+        cp.waitForFence(RendererData.gpuTimeline.fence)
+        cp.setComputePipelineState(meshCullPipe.pipelineState)
+        cp.setBuffer(context.sceneBuffer.buffer.buffer, offset: 0, index: 0)
+        cp.setBuffer(meshICB.buffer.buffer, offset: 0, index: 1)
+        cp.setBytes(&instanceCount, length: MemoryLayout<UInt32>.size, index: 2)
+        cp.setBuffer(context.allocator.buffer.buffer, offset: offset, index: 3)
+        cp.dispatchThreadgroups(MTLSizeMake(cullTgCountX, 1, 1), threadsPerThreadgroup: MTLSizeMake(64, 1, 1))
+        cp.updateFence(RendererData.gpuTimeline.fence)
+        cp.endEncoding()
+        
+        // Flush
+        let rpd = MTLRenderPassDescriptor()
+        rpd.colorAttachments[0].texture = self.colorTexture.texture
+        rpd.colorAttachments[0].clearColor = .init()
+        rpd.colorAttachments[0].loadAction = .clear
+        rpd.colorAttachments[0].storeAction = .store
+        rpd.depthAttachment.texture = self.depthTexture.texture
+        rpd.depthAttachment.clearDepth = 1.0
+        rpd.depthAttachment.storeAction = .store
+        rpd.depthAttachment.loadAction = .clear
+    
+        let rp = RendererData.mtl3commandBuffer.makeRenderCommandEncoder(descriptor: rpd)!
+        rp.waitForFence(RendererData.gpuTimeline.fence, before: .object)
+        rp.setRenderPipelineState(meshPipeline.pipelineState)
+        rp.executeCommandsInBuffer(meshICB.cmdBuffer, range: 0..<8092)
+        rp.endEncoding()
+        
+        RendererData.mtl3commandBuffer.commit()
+        RendererData.mtl3commandBuffer.waitUntilCompleted()
+    }
+    
+    func meshPathMTL4(context: FrameContext) {
+        var maxInstanceCount = 8092
+        var instanceCount = context.sceneBuffer.instanceCount
+        let resetTgCountX = (Int(maxInstanceCount) + 63) / 64
+        let cullTgCountX = (Int(instanceCount) + 63) / 64
+        let offset = context.allocator.allocate(size: MemoryLayout<UInt32>.size * 8092)
+        
+        var rpDesc = RenderPassDescriptor()
+        rpDesc.addAttachment(texture: self.colorTexture)
+        rpDesc.setDepthAttachment(texture: depthTexture)
+        rpDesc.name = "Forward Pass"
+        
+        let cp = context.cmdBuffer.beginComputePass(name: "Reset & Cull Instances")
+        cp.setPipeline(pipeline: icbResetPipe)
+        cp.setBuffer(buf: meshICB.buffer, index: 0)
+        cp.setBytes(allocator: context.allocator, index: 1, bytes: &maxInstanceCount, size: MemoryLayout<Int>.size)
+        cp.dispatch(threads: MTLSizeMake(resetTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.intraPassBarrier(before: .dispatch, after: .dispatch)
+        cp.setPipeline(pipeline: meshCullPipe)
+        cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
+        cp.setBuffer(buf: meshICB.buffer, index: 1)
+        cp.setBytes(allocator: context.allocator, index: 2, bytes: &instanceCount, size: MemoryLayout<UInt32>.size)
+        cp.setBuffer(buf: context.allocator.buffer, index: 3, offset: offset)
+        cp.dispatch(threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.signalFenceAfterStage(stage: .dispatch)
+        cp.end()
+
+        let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
+        rp.waitFenceBeforeStage(stage: .object)
+        rp.setMeshPipeline(pipeline: meshPipeline)
+        rp.executeIndirect(icb: meshICB, maxCommandCount: 8092)
+        rp.end()
     }
 }

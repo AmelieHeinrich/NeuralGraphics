@@ -23,6 +23,14 @@ class ComputePass {
         self.encoder.setComputePipelineState(pipeline.pipelineState)
         self.encoder.setArgumentTable(RendererData.computeTable)
     }
+    
+    func resetCommands(icb: ICB, maxCommands: Int) {
+        self.encoder.resetCommands(buffer: icb.cmdBuffer, range: 0..<maxCommands)
+    }
+    
+    func optimizeCommands(icb: ICB, maxCommands: Int) {
+        self.encoder.optimizeCommands(buffer: icb.cmdBuffer, range: 0..<maxCommands)
+    }
 
     func setBuffer(buf: Buffer, index: Int, offset: Int = 0) {
         RendererData.computeTable.setAddress(buf.getAddress() + UInt64(offset), index: index)

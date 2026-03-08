@@ -18,11 +18,15 @@ class ICB {
         descriptor.inheritPipelineState = true
         
         self.cmdBuffer = RendererData.device.makeIndirectCommandBuffer(descriptor: descriptor, maxCommandCount: maxCommandCount)!
-        self.cmdBuffer.label = "ICB"
         
         var resourceID = self.cmdBuffer.gpuResourceID
         self.buffer = Buffer(bytes: &resourceID, size: MemoryLayout<UInt64>.size)
         
         RendererData.addResidentAllocation(self.cmdBuffer)
+    }
+    
+    func setName(label: String) {
+        self.cmdBuffer.label = label
+        self.buffer.setName(name: label + " (Wrapping Buffer)")
     }
 }

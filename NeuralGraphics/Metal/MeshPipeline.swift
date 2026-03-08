@@ -51,6 +51,7 @@ class MeshPipeline {
         }
         
         let pipelineDesc = MTL4MeshRenderPipelineDescriptor()
+        pipelineDesc.supportIndirectCommandBuffers = descriptor.supportsIndirect ? .enabled : .disabled
         pipelineDesc.label = descriptor.name
         pipelineDesc.meshFunctionDescriptor = meshFunctionDescriptor
         if descriptor.fragmentFunction != nil {

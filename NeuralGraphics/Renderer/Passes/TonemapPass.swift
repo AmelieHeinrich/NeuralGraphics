@@ -30,20 +30,18 @@ class TonemapPass: Pass {
         let forward = context.resources.get("Forward.Color") as Texture?
         guard let forward = forward else { return }
 
+        var gamma = settings.tonemapGamma
         var rpDesc = RenderPassDescriptor()
         rpDesc.setName(name: "Tonemap")
         rpDesc.addAttachment(texture: context.drawable.texture, shouldClear: false)
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-
-        var gamma = settings.tonemapGamma
-        rp.consumerBarrier(before: .fragment, after: .fragment)
-
+        rp.waitFenceBeforeStage(stage: .vertex)
         rp.setPipeline(pipeline: self.pipeline)
         rp.setTexture(texture: forward, index: 0, stages: .fragment)
         rp.setBytes(allocator: context.allocator, index: 0, bytes: &gamma, size: MemoryLayout<Float>.size, stages: .fragment)
         rp.draw(primitiveType: .triangle, vertexCount: 3, vertexOffset: 0)
-
+        rp.signalFenceAfterStage(stage: .fragment)
         rp.end()
     }
 }

@@ -84,8 +84,8 @@ class RenderPass {
         if pipeline.depthStencilState != nil {
             self.encoder.setDepthStencilState(pipeline.depthStencilState)
         }
-        self.encoder.setArgumentTable(RendererData.meshTable, stages: .mesh)
         self.encoder.setArgumentTable(RendererData.objectTable, stages: .object)
+        self.encoder.setArgumentTable(RendererData.meshTable, stages: .mesh)
         self.encoder.setArgumentTable(RendererData.fragmentTable, stages: .fragment)
     }
     

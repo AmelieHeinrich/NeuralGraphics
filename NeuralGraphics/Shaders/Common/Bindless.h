@@ -57,9 +57,6 @@ struct SceneMaterial
     texture2d<float> ORM;
     texture2d<float> Emissive;
     uint Flags;
-    uint _pad0;
-    uint _pad1;
-    uint _pad2;
 
     bool hasAlbedo()   const { return Flags & MaterialFlag_HasAlbedo;   }
     bool hasNormal()   const { return Flags & MaterialFlag_HasNormal;   }
@@ -76,8 +73,6 @@ struct SceneInstanceLOD
     const device MeshMeshletBounds* MeshletBounds;
     uint IndexCount;
     uint MeshletCount;
-    uint _pad0;
-    uint _pad1;
 };
 
 struct SceneInstance
@@ -88,7 +83,6 @@ struct SceneInstance
     uint LODCount;
     float3 AABBMin;
     float3 AABBMax;
-    uint _pad0;
     SceneInstanceLOD LODs[kMaxLODs];
 };
 

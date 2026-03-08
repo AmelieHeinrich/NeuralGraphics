@@ -14,6 +14,9 @@ struct RendererData {
     static var compiler: MTL4Compiler!
     private static let residencyLock = NSLock()
 
+    static var mtl3commandQueue: MTLCommandQueue!
+    static var mtl3commandBuffer: MTLCommandBuffer!
+    
     static func addResidentAllocation(_ allocation: some MTLAllocation) {
         residencyLock.withLock { residencySet.addAllocation(allocation) }
     }
@@ -72,6 +75,9 @@ struct RendererData {
         
         argumentTableDescriptor.label = "ML Argument Table"
         self.mlTable = try! self.device.makeArgumentTable(descriptor: argumentTableDescriptor)
+        
+        self.mtl3commandQueue = device.makeCommandQueue()
+        self.mtl3commandBuffer = mtl3commandQueue.makeCommandBuffer()
     }
     
     static func waitIdle() {

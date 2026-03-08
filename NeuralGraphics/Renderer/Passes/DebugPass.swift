@@ -306,16 +306,16 @@ class DebugPass: Pass {
         if let depth = depthTex {
             rpDesc.setDepthAttachment(texture: depth, shouldClear: false, shouldStore: true)
         }
+        
+        var data = DebugData(camera: context.camera.viewProjection)
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-        rp.consumerBarrier(before: .fragment, after: .dispatch)
+        rp.waitFenceBeforeStage(stage: .vertex)
         rp.setPipeline(pipeline: depthTex != nil ? pipelineDepth : pipelineNoDepth)
-
-        var data = DebugData(camera: context.camera.viewProjection)
-        rp.setBytes(allocator: context.allocator, index: 0, bytes: &data,
-                    size: MemoryLayout<DebugData>.size, stages: .vertex)
+        rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<DebugData>.size, stages: .vertex)
         rp.setBuffer(buf: buf, index: 1, stages: .vertex)
         rp.draw(primitiveType: .line, vertexCount: vertices.count, vertexOffset: 0)
+        rp.signalFenceAfterStage(stage: .fragment)
         rp.end()
     }
 }

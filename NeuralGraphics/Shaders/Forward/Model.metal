@@ -5,15 +5,10 @@
 //  Created by Amélie Heinrich on 02/03/2026.
 //
 
-#include "Common/Bindless.h"
+#include "../Common/Bindless.h"
 
 #include <metal_stdlib>
 using namespace metal;
-
-struct ForwardPushConstants {
-    uint InstanceIndex;
-    uint LOD;
-};
 
 struct VSOut {
     float4 Position [[position]];
@@ -27,8 +22,8 @@ struct VSOut {
 [[vertex]]
 VSOut forward_vs(uint vid [[vertex_id]],
                  const device SceneBuffer& scene [[buffer(0)]],
-                 const device ForwardPushConstants& push [[buffer(1)]]) {
-    SceneInstance inst = scene.Instances[push.InstanceIndex];
+                 uint instanceIndex [[base_instance]]) {
+    SceneInstance inst = scene.Instances[instanceIndex];
     SceneEntity entity = scene.Entities[inst.EntityIndex];
 
     MeshVertex v = inst.VertexBuffer[vid];
@@ -41,7 +36,7 @@ VSOut forward_vs(uint vid [[vertex_id]],
     out.Normal        = normalize((entity.Transform * float4(v.Normal, 0.0f)).xyz);
     out.WorldPos      = worldPos.xyz;
     out.Tangent       = v.Tangent;
-    out.InstanceIndex = push.InstanceIndex;
+    out.InstanceIndex = instanceIndex;
     return out;
 }
 
