@@ -20,7 +20,7 @@ class ICB {
         descriptor.maxFragmentBufferBindCount = 16
         descriptor.maxMeshBufferBindCount = 16
         descriptor.maxKernelBufferBindCount = 16
-        descriptor.maxObjectThreadgroupMemoryBindCount = 16
+        descriptor.maxObjectBufferBindCount = 16
         
         self.cmdBuffer = RendererData.device.makeIndirectCommandBuffer(descriptor: descriptor, maxCommandCount: maxCommandCount)!
         

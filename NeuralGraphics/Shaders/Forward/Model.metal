@@ -22,6 +22,7 @@ struct VSOut {
 [[vertex]]
 VSOut forward_vs(uint vid [[vertex_id]],
                  const device SceneBuffer& scene [[buffer(0)]],
+                 const device uint& instanceID [[buffer(1)]],
                  uint instanceIndex [[base_instance]]) {
     SceneInstance inst = scene.Instances[instanceIndex];
     SceneEntity entity = scene.Entities[inst.EntityIndex];

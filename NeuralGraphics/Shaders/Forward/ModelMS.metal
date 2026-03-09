@@ -22,8 +22,26 @@ struct MSOut {
     float3 Normal;
     float3 WorldPos;
     float4 Tangent;
+    float3 MeshletColor;
     uint InstanceIndex [[flat]];
 };
+
+float3 HashColor(uint id)
+{
+    uint h = id;
+    h ^= h >> 16;
+    h *= 0x45d9f3b;
+    h ^= h >> 16;
+
+    float hue = float(h & 0xFFFF) / 65535.0;
+    hue = fmod(hue + 0.33, 1.0);
+
+    float s = 1.0;
+    float v = 1.0;
+
+    float3 rgb = clamp(abs(fmod(hue * 6.0 + float3(0, 4, 2), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    return v * mix(float3(1, 1, 1), rgb, s);
+}
 
 using MeshOutput = metal::mesh<MSOut, void, 64, 128, topology::triangle>;
 
@@ -82,6 +100,7 @@ void forward_ms(const device SceneBuffer& scene [[buffer(0)]],
         vtx.WorldPos      = worldPos.xyz;
         vtx.Tangent       = v.Tangent;
         vtx.InstanceIndex = instanceIndex;
+        vtx.MeshletColor = HashColor(meshletIndex);
 
         outMesh.set_vertex(gtid, vtx);
     }
@@ -109,5 +128,5 @@ float4 forward_msfs(MSOut in [[stage_in]],
     //if (color.a < 0.25f)
     //    discard_fragment();
 
-    return float4(in.Normal, 1.0);
+    return float4(in.MeshletColor, 1.0);
 }

@@ -25,6 +25,6 @@ class GPUTimeline {
     }
     
     func wait(value: UInt64) {
-        event.wait(untilSignaledValue: value, timeoutMS: 8)
+        event.wait(untilSignaledValue: value, timeoutMS: 10_000)
     }
 }

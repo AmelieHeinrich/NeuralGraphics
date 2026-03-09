@@ -25,6 +25,7 @@ private struct GPUSceneMaterial {
     var ormID: UInt64
     var emissiveID: UInt64
     var flags: UInt32
+    var padding: UInt32
 }
 
 private struct GPUSceneInstanceLOD {
@@ -60,6 +61,7 @@ private struct GPUSceneBufferHeader {
     var materialCount: UInt32
     var instanceCount: UInt32
     var entityCount: UInt32
+    var padding: UInt32
     var materialsPtr: UInt64
     var instancesPtr: UInt64
     var entitiesPtr: UInt64
@@ -138,7 +140,7 @@ class SceneBufferBuilder {
                 matPtr[matIdx] = GPUSceneMaterial(
                     albedoID: albedoID, normalID: normalID,
                     ormID: ormID, emissiveID: emissiveID,
-                    flags: flags)
+                    flags: flags, padding: 0)
                 matIdx += 1
             }
         }
@@ -267,6 +269,7 @@ class SceneBufferBuilder {
         ptr.pointee.materialCount = UInt32(materialCount)
         ptr.pointee.instanceCount = UInt32(instanceCount)
         ptr.pointee.entityCount = UInt32(entityCount)
+        ptr.pointee.padding = 0
         ptr.pointee.materialsPtr = materialsBuffer.getAddress()
         ptr.pointee.instancesPtr = instancesBuffer.getAddress()
         ptr.pointee.entitiesPtr = entitiesBuffer.getAddress()

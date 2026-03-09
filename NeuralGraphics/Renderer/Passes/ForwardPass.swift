@@ -29,9 +29,10 @@ class ForwardPass: Pass {
         self.icbResetPipe = ComputePipeline(function: "reset_icb")
         self.vertexCullPipe = ComputePipeline(function: "vertex_geometry_cull")
         self.meshCullPipe = ComputePipeline(function: "mesh_geometry_cull")
-        self.vertexICB = ICB(inherit: false, commandTypes: .drawIndexed, maxCommandCount: 8092)
+        self.vertexICB = ICB(inherit: false, commandTypes: .drawIndexed, maxCommandCount: 65536)
         self.vertexICB.setName(label: "Vertex Forward ICB")
-        self.meshICB = ICB(inherit: false, commandTypes: .drawMeshThreadgroups, maxCommandCount: 8092)
+        self.meshICB = ICB(
+            inherit: false, commandTypes: .drawMeshThreadgroups, maxCommandCount: 65536)
         self.meshICB.setName(label: "Mesh Forward ICB")
 
         var meshPipelineDesc = MeshPipelineDescriptor()
@@ -72,8 +73,8 @@ class ForwardPass: Pass {
         let depth = Texture(descriptor: depthDesc)
         depth.setLabel(name: "Forward Depth Buffer")
         self.depthTexture = depth
-        
-        self.instanceIDBuffer = Buffer(size: 8092 * MemoryLayout<UInt32>.size)
+
+        self.instanceIDBuffer = Buffer(size: 65536 * MemoryLayout<UInt32>.size)
         self.instanceIDBuffer.setName(name: "Instance ID Buffer (Mesh ICB")
 
         super.init()
@@ -104,7 +105,7 @@ class ForwardPass: Pass {
     }
 
     func vertexPath(context: FrameContext) {
-        var maxInstanceCount = 8092
+        var maxInstanceCount = 65536
         var instanceCount = context.sceneBuffer.instanceCount
         let resetTgCountX = (Int(maxInstanceCount) + 63) / 64
         let cullTgCountX = (Int(instanceCount) + 63) / 64
@@ -112,43 +113,51 @@ class ForwardPass: Pass {
         rpDesc.addAttachment(texture: self.colorTexture)
         rpDesc.setDepthAttachment(texture: depthTexture)
         rpDesc.name = "Forward Pass"
-        
+
+        memset(instanceIDBuffer.contents(), 0, MemoryLayout<UInt32>.size * 65536)
+
         // Cull
         let cp = context.cmdBuffer.beginComputePass(name: "Reset & Cull Instances")
         cp.setPipeline(pipeline: icbResetPipe)
         cp.setBuffer(buf: vertexICB.buffer, index: 0)
-        cp.setBytes(allocator: context.allocator, index: 1, bytes: &maxInstanceCount, size: MemoryLayout<Int>.size)
-        cp.dispatch(threads: MTLSizeMake(resetTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.setBytes(
+            allocator: context.allocator, index: 1, bytes: &maxInstanceCount,
+            size: MemoryLayout<Int>.size)
+        cp.dispatch(
+            threads: MTLSizeMake(resetTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
         cp.intraPassBarrier(before: .dispatch, after: .dispatch)
         cp.setPipeline(pipeline: vertexCullPipe)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
         cp.setBuffer(buf: vertexICB.buffer, index: 1)
-        cp.setBytes(allocator: context.allocator, index: 2, bytes: &instanceCount, size: MemoryLayout<UInt32>.size)
-        cp.dispatch(threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.setBytes(
+            allocator: context.allocator, index: 2, bytes: &instanceCount,
+            size: MemoryLayout<UInt32>.size)
+        cp.dispatch(
+            threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
         cp.end()
 
         // Flush
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
         rp.consumerBarrier(before: .vertex, after: .dispatch)
         rp.setPipeline(pipeline: pipeline)
-        rp.executeIndirect(icb: vertexICB, maxCommandCount: 8092)
+        rp.executeIndirect(icb: vertexICB, maxCommandCount: 65536)
         rp.end()
     }
-    
+
     func meshPathMTL3(context: FrameContext) {
         var instanceCount = context.sceneBuffer.instanceCount
         let cullTgCountX = (Int(instanceCount) + 63) / 64
-        let offset = context.allocator.allocate(size: MemoryLayout<UInt32>.size * 8092)
-        
+        let offset = context.allocator.allocate(size: MemoryLayout<UInt32>.size * 65536)
+
         RendererData.mtl3commandBuffer = RendererData.mtl3commandQueue.makeCommandBuffer()
         RendererData.mtl3commandBuffer.useResidencySet(RendererData.residencySet)
 
         // Cull
         let bp = RendererData.mtl3commandBuffer.makeBlitCommandEncoder()!
-        bp.resetCommandsInBuffer(meshICB.cmdBuffer, range: 0..<8092)
+        bp.resetCommandsInBuffer(meshICB.cmdBuffer, range: 0..<65536)
         bp.updateFence(RendererData.gpuTimeline.fence)
         bp.endEncoding()
-        
+
         let cp = RendererData.mtl3commandBuffer.makeComputeCommandEncoder()!
         cp.waitForFence(RendererData.gpuTimeline.fence)
         cp.setComputePipelineState(meshCullPipe.pipelineState)
@@ -156,10 +165,11 @@ class ForwardPass: Pass {
         cp.setBuffer(meshICB.buffer.buffer, offset: 0, index: 1)
         cp.setBytes(&instanceCount, length: MemoryLayout<UInt32>.size, index: 2)
         cp.setBuffer(context.allocator.buffer.buffer, offset: offset, index: 3)
-        cp.dispatchThreadgroups(MTLSizeMake(cullTgCountX, 1, 1), threadsPerThreadgroup: MTLSizeMake(64, 1, 1))
+        cp.dispatchThreadgroups(
+            MTLSizeMake(cullTgCountX, 1, 1), threadsPerThreadgroup: MTLSizeMake(64, 1, 1))
         cp.updateFence(RendererData.gpuTimeline.fence)
         cp.endEncoding()
-        
+
         // Flush
         let rpd = MTLRenderPassDescriptor()
         rpd.colorAttachments[0].texture = self.colorTexture.texture
@@ -170,70 +180,55 @@ class ForwardPass: Pass {
         rpd.depthAttachment.clearDepth = 1.0
         rpd.depthAttachment.storeAction = .store
         rpd.depthAttachment.loadAction = .clear
-    
+
         let rp = RendererData.mtl3commandBuffer.makeRenderCommandEncoder(descriptor: rpd)!
         rp.waitForFence(RendererData.gpuTimeline.fence, before: .object)
         rp.setRenderPipelineState(meshPipeline.pipelineState)
-        rp.executeCommandsInBuffer(meshICB.cmdBuffer, range: 0..<8092)
+        rp.executeCommandsInBuffer(meshICB.cmdBuffer, range: 0..<65536)
         rp.updateFence(RendererData.gpuTimeline.fence, after: .fragment)
         rp.endEncoding()
-        
+
         RendererData.mtl3commandBuffer.commit()
         RendererData.mtl3commandBuffer.waitUntilCompleted()
     }
-    
+
     func meshPathMTL4(context: FrameContext) {
-        var maxInstanceCount = 8092
+        var maxInstanceCount = 65536
         var instanceCount = context.sceneBuffer.instanceCount
         let resetTgCountX = (Int(maxInstanceCount) + 63) / 64
         let cullTgCountX = (Int(instanceCount) + 63) / 64
-        
-        memset(instanceIDBuffer.contents(), 0, MemoryLayout<UInt32>.size * 8092)
-        
+
+        memset(instanceIDBuffer.contents(), 0, MemoryLayout<UInt32>.size * 65536)
+
         var rpDesc = RenderPassDescriptor()
         rpDesc.addAttachment(texture: self.colorTexture)
         rpDesc.setDepthAttachment(texture: depthTexture)
         rpDesc.name = "Forward Pass"
-        
+
         let cp = context.cmdBuffer.beginComputePass(name: "Reset & Cull Instances")
         cp.setPipeline(pipeline: icbResetPipe)
         cp.setBuffer(buf: meshICB.buffer, index: 0)
-        cp.setBytes(allocator: context.allocator, index: 1, bytes: &maxInstanceCount, size: MemoryLayout<Int>.size)
-        cp.dispatch(threads: MTLSizeMake(resetTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.setBytes(
+            allocator: context.allocator, index: 1, bytes: &maxInstanceCount,
+            size: MemoryLayout<Int>.size)
+        cp.dispatch(
+            threads: MTLSizeMake(resetTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
         cp.intraPassBarrier(before: .dispatch, after: .dispatch)
         cp.setPipeline(pipeline: meshCullPipe)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
         cp.setBuffer(buf: meshICB.buffer, index: 1)
-        cp.setBytes(allocator: context.allocator, index: 2, bytes: &instanceCount, size: MemoryLayout<UInt32>.size)
+        cp.setBytes(
+            allocator: context.allocator, index: 2, bytes: &instanceCount,
+            size: MemoryLayout<UInt32>.size)
         cp.setBuffer(buf: instanceIDBuffer, index: 3)
-        cp.dispatch(threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
-        cp.producerBarrier(before: .object, after: .dispatch)
+        cp.dispatch(
+            threads: MTLSizeMake(cullTgCountX, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
         cp.end()
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
         rp.consumerBarrier(before: .object, after: .dispatch)
         rp.setMeshPipeline(pipeline: meshPipeline)
-        rp.executeIndirect(icb: meshICB, maxCommandCount: 8092)
-        //rp.setBuffer(buf: context.sceneBuffer.buffer, index: 0, stages: [.mesh, .object, .fragment])
-        //var globalInstanceIdx: UInt32 = 0
-        //if let scene = context.scene {
-        //    for entity in scene.entities {
-        //        let model = entity.mesh
-        //        let lod = min(settings.forcedLOD, model.lodCount - 1)
-////
-        //        for instance in model.instances {
-        //            let tgCountX = Int(instance.meshletCount[lod] / 32) + 1
-////
-        //            rp.setBytes(allocator: context.allocator, index: 1, bytes: &globalInstanceIdx, size: MemoryLayout<UInt32>.size, stages: .object)
-        //            rp.dispatchMesh(
-        //                threadgroupsPerGrid: MTLSizeMake(tgCountX, 1, 1),
-        //                threadsPerObjectThreadgroup: MTLSizeMake(32, 1, 1),
-        //                threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1))
-////
-        //            globalInstanceIdx += 1
-        //        }
-        //    }
-        //}
+        rp.executeIndirect(icb: meshICB, maxCommandCount: 65536)
         rp.end()
     }
 }

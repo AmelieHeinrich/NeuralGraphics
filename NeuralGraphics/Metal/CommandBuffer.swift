@@ -16,35 +16,35 @@ class CommandBuffer {
         self.commandBuffer = RendererData.device.makeCommandBuffer()!
         self.allocator = RendererData.device.makeCommandAllocator()!
     }
-    
+
     func setName(name: String) {
         self.commandBuffer.label = name
     }
-    
+
     func begin(commitResidencySet: Bool = true) {
         self.allocator.reset()
-        self.commandBuffer.beginCommandBuffer(allocator: self.allocator)
         if commitResidencySet {
             RendererData.commitResidency()
         }
+        self.commandBuffer.beginCommandBuffer(allocator: self.allocator)
     }
-    
+
     func end() {
         self.commandBuffer.endCommandBuffer()
     }
-    
+
     func beginRenderPass(descriptor: RenderPassDescriptor) -> RenderPass {
         return RenderPass(descriptor: descriptor, cmdBuffer: self.commandBuffer)
     }
-    
+
     func beginMLPass(name: String = "ML Pass") -> MLPass {
         return MLPass(name: name, cmdBuffer: self.commandBuffer)
     }
-    
+
     func beginComputePass(name: String = "Compute Pass") -> ComputePass {
         return ComputePass(label: name, cmdBuffer: self.commandBuffer)
     }
-    
+
     func useResidencySet(_ set: MTLResidencySet) {
         commandBuffer.useResidencySet(set)
     }
@@ -52,11 +52,11 @@ class CommandBuffer {
     func commit() {
         RendererData.cmdQueue.commit([commandBuffer])
     }
-    
+
     func pushMarker(name: String) {
         self.commandBuffer.pushDebugGroup(name)
     }
-    
+
     func popMarker() {
         self.commandBuffer.popDebugGroup()
     }

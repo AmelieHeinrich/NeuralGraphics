@@ -57,6 +57,7 @@ struct SceneMaterial
     texture2d<float> ORM;
     texture2d<float> Emissive;
     uint Flags;
+    uint Padding;
 
     bool hasAlbedo()   const { return Flags & MaterialFlag_HasAlbedo;   }
     bool hasNormal()   const { return Flags & MaterialFlag_HasNormal;   }
@@ -115,7 +116,7 @@ struct SceneBuffer
     uint MaterialCount;
     uint InstanceCount;
     uint EntityCount;
-    uint _pad0;
+    uint Padding;
 
     const device SceneMaterial* Materials;
     const device SceneInstance* Instances;
