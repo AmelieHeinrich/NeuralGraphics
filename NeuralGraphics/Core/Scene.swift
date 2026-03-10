@@ -20,6 +20,12 @@ struct Entity {
 /// Holds all the entities that make up a loaded scene.
 class RenderScene {
     var entities: [Entity] = []
+    var tlas: TLAS
+    
+    init() {
+        tlas = TLAS(makeResidentNow: true)
+        tlas.setName(name: "Scene TLAS")
+    }
 }
 
 // MARK: - Descriptors (data layer — no SwiftUI)
@@ -137,17 +143,18 @@ extension SceneConfiguration {
             tags: ["Stress test", "Mesh shaders"],
             descriptor: SceneDescriptor(
                 models: (0..<64).map { _ in
-                        SceneModelDescriptor(
-                            resource: "Buddha",
-                            transform: simd_float4x4.translation(simd_float3(
-                                    Float.random(in: -5...5),
-                                    Float.random(in: -5...5),
-                                    Float.random(in: -5...5)
+                    SceneModelDescriptor(
+                        resource: "Buddha",
+                        transform: simd_float4x4.translation(
+                            simd_float3(
+                                Float.random(in: -5...5),
+                                Float.random(in: -5...5),
+                                Float.random(in: -5...5)
                             )) * simd_float4x4.rotationX(Float.random(in: -180...180))
-                               * simd_float4x4.rotationY(Float.random(in: -180...180))
-                               * simd_float4x4.rotationZ(Float.random(in: -180...180))
-                        )
-                    })
+                            * simd_float4x4.rotationY(Float.random(in: -180...180))
+                            * simd_float4x4.rotationZ(Float.random(in: -180...180))
+                    )
+                })
         ),
     ]
 }

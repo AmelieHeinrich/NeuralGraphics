@@ -60,7 +60,7 @@ private struct GPUSceneBufferHeader {
     var materialsPtr: UInt64
     var instancesPtr: UInt64
     var entitiesPtr: UInt64
-    var padding: UInt32
+    var asPtr: UInt64
     
     var camera: GPUSceneCamera
     var materialCount: UInt32
@@ -72,6 +72,7 @@ class SceneBufferBuilder {
 
     // The main GPU buffer holding the entire scene description
     private(set) var buffer: Buffer!
+    private(set) var accelerationStructure: TLAS!
 
     // Sub-buffers for the arrays (so we can grow them independently)
     private(set) var materialsBuffer: Buffer!
@@ -108,6 +109,7 @@ class SceneBufferBuilder {
     func build(scene: RenderScene) {
         // ---- Count everything ----
         entityCount = scene.entities.count
+        accelerationStructure = scene.tlas
 
         var totalMaterials = 0
         var totalInstances = 0
@@ -270,7 +272,7 @@ class SceneBufferBuilder {
         ptr.pointee.materialCount = UInt32(materialCount)
         ptr.pointee.instanceCount = UInt32(instanceCount)
         ptr.pointee.entityCount = UInt32(entityCount)
-        ptr.pointee.padding = 0
+        ptr.pointee.asPtr = accelerationStructure.getResourceID()
         ptr.pointee.materialsPtr = materialsBuffer.getAddress()
         ptr.pointee.instancesPtr = instancesBuffer.getAddress()
         ptr.pointee.entitiesPtr = entitiesBuffer.getAddress()

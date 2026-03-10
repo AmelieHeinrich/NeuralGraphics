@@ -22,12 +22,15 @@ class BLAS {
         for mesh in model.instances {
             let geometry = MTL4AccelerationStructureTriangleGeometryDescriptor()
             geometry.vertexBuffer = MTL4BufferRangeMake(
-                model.vertexBuffer.getAddress(), UInt64(model.vertexBuffer.size))
+                model.vertexBuffer.getAddress() + UInt64(mesh.vertexOffset)
+                    * UInt64(MemoryLayout<PackedVertex>.size),
+                UInt64(model.vertexBuffer.size) - UInt64(mesh.vertexOffset)
+                    * UInt64(MemoryLayout<PackedVertex>.size))
             geometry.vertexStride = MemoryLayout<PackedVertex>.size
             geometry.indexBuffer = MTL4BufferRangeMake(
                 model.indexBuffer.getAddress()
-                    + UInt64(Int(mesh.indexOffset[0]) * MemoryLayout<Int>.size),
-                UInt64(Int(mesh.indexCount[0]) * MemoryLayout<Int>.size))
+                    + UInt64(Int(mesh.indexOffset[0]) * MemoryLayout<UInt32>.size),
+                UInt64(Int(mesh.indexCount[0]) * MemoryLayout<UInt32>.size))
             geometry.triangleCount = Int(mesh.indexCount[0] / 3)
             geometry.indexType = .uint32
             geometry.opaque = true

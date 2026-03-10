@@ -114,7 +114,7 @@ struct SceneBuffer
     const device SceneMaterial* Materials;
     const device SceneInstance* Instances;
     const device SceneEntity*  Entities;
-    uint Padding;
+    instance_acceleration_structure AccelerationStructure;
     
     SceneCamera Camera;
     uint MaterialCount;

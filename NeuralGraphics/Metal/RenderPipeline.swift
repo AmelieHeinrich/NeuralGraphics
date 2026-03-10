@@ -8,7 +8,7 @@
 import Metal
 
 struct RenderPipelineDescriptor {
-    var name: String = ""
+    var name: String = "Render Pipeline"
     
     var vertexFunction: String = ""
     var fragmentFunction: String? = nil

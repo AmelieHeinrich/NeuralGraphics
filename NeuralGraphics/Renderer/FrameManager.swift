@@ -125,11 +125,14 @@ class FrameManager {
         let forward = ForwardPass(settings: settings)
         let tonemap = TonemapPass(settings: settings)
         let debug = DebugPass.shared
+        let tlas = TLASBuildPass()
         debug.settings = settings
-        self.passes = [forward, tonemap, debug]
+        
+        self.passes = [tlas, forward, tonemap, debug]
 
         // Desktop pipeline
         let desktopTimeline = RenderTimeline()
+        desktopTimeline.addPass(tlas)
         desktopTimeline.addPass(forward)
         desktopTimeline.addPass(tonemap)
         desktopTimeline.addPass(debug)

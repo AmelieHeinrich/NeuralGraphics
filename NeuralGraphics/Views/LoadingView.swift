@@ -15,7 +15,7 @@ import SwiftUI
 /// progress back to the main thread so SwiftUI can drive the loading screen.
 final class SceneLoader: ObservableObject {
     @Published private(set) var progress: Double = 0
-    @Published private(set) var status: String   = "Initializing…"
+    @Published private(set) var status: String = "Initializing…"
     @Published private(set) var scene: RenderScene? = nil
 
     var isLoaded: Bool { scene != nil }
@@ -25,7 +25,7 @@ final class SceneLoader: ObservableObject {
             let models = descriptor.models
 
             // Deduplicate: collect the unique resource names in first-seen order.
-            var seen   = Set<String>()
+            var seen = Set<String>()
             var unique = [String]()
             for m in models {
                 if seen.insert(m.resource).inserted { unique.append(m.resource) }
@@ -34,8 +34,8 @@ final class SceneLoader: ObservableObject {
             // Load each unique mesh once, reporting progress across unique count.
             var cache = [String: Mesh]()
             for (i, resource) in unique.enumerated() {
-                let base  = Double(i)      / Double(unique.count)
-                let slice = 1.0            / Double(unique.count)
+                let base = Double(i) / Double(unique.count)
+                let slice = 1.0 / Double(unique.count)
 
                 guard let url = Bundle.main.url(forResource: resource, withExtension: "bin") else {
                     DispatchQueue.main.async { [weak self] in
@@ -47,7 +47,7 @@ final class SceneLoader: ObservableObject {
                 let mesh = MeshLoader.load(url: url) { p, s in
                     DispatchQueue.main.async { [weak self] in
                         self?.progress = base + p * slice
-                        self?.status   = "[\(resource)] \(s)"
+                        self?.status = "[\(resource)] \(s)"
                     }
                 }
                 if let mesh { cache[resource] = mesh }
@@ -71,11 +71,37 @@ final class SceneLoader: ObservableObject {
                     }
                 }
 
-                let scene      = RenderScene()
-                scene.entities = entities
-                self?.scene    = scene
-                self?.progress = 1.0
-                self?.status   = "Ready"
+                if RendererData.device.supportsFamily(.apple9) {
+                    self?.status = "Building Acceleration Structures…"
+                    let cb = CommandBuffer()
+                    cb.begin()
+                    let cp = cb.beginComputePass(name: "Build BLASes")
+                    for mesh in cache.values {
+                        if let blas = mesh.blas {
+                            cp.buildBLAS(blas: blas)
+                        }
+                    }
+                    cp.end()
+                    cb.end()
+                    cb.commit()
+                }
+
+                DispatchQueue.global(qos: .userInitiated).async {
+                    RendererData.waitIdle()
+                    if RendererData.device.supportsFamily(.apple9) {
+                        for mesh in cache.values {
+                            mesh.blas?.destroyScratch()
+                        }
+                    }
+
+                    DispatchQueue.main.async { [weak self] in
+                        let scene = RenderScene()
+                        scene.entities = entities
+                        self?.scene = scene
+                        self?.progress = 1.0
+                        self?.status = "Ready"
+                    }
+                }
             }
         }
     }
@@ -99,7 +125,8 @@ struct LoadingView: View {
                     .resizable()
                     .frame(width: 96, height: 96)
                     .scaleEffect(pulse ? 1.06 : 1.0)
-                    .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: pulse)
+                    .animation(
+                        .easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: pulse)
 
                 // Title
                 VStack(spacing: 6) {

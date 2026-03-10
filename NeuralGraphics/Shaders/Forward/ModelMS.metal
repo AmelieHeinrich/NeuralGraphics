@@ -43,6 +43,11 @@ float3 HashColor(uint id)
     return v * mix(float3(1, 1, 1), rgb, s);
 }
 
+float3 barycentric_to_color(float2 uv) {
+    float3 bary = float3(uv.x, uv.y, 1.0 - uv.x - uv.y);
+    return bary; // RGB maps to (u, v, w)
+}
+
 using MeshOutput = metal::mesh<MSOut, void, 64, 128, topology::triangle>;
 
 [[object]]
@@ -131,6 +136,23 @@ float4 forward_msfs(MSOut in [[stage_in]],
 
     if (color.a < 0.25f)
         discard_fragment();
-
-    return float4(color.rgb * in.MeshletColor, 1.0);
+    
+    intersector<triangle_data, instancing> i;
+    i.accept_any_intersection(true);
+    i.assume_geometry_type(geometry_type::triangle);
+    i.assume_identity_transforms(true);
+    i.force_opacity(forced_opacity::opaque);
+    
+    ray ray;
+    ray.direction = -float3(0.0, -0.8, 0.22);
+    ray.origin = in.WorldPos + in.Normal * 0.005;
+    ray.min_distance = 0.001;
+    ray.max_distance = 1000;
+    
+    typename intersector<triangle_data, instancing>::result_type result;
+    result = i.intersect(ray, scene.AccelerationStructure, 0xFF);
+    bool occluded = (result.type == intersection_type::none);
+    
+    //float3 geometryColor = HashColor(result.geometry_id);
+    return float4(color.rgb * occluded, 1.0);
 }

@@ -6,24 +6,31 @@
 //
 
 import Metal
+import simd
 
 class TLAS {
     var tlas: MTLAccelerationStructure
     var descriptor: MTL4InstanceAccelerationStructureDescriptor
-    var instanceDescriptors: [MTLAccelerationStructureInstanceDescriptor] = []
+    var instanceDescriptors: [MTLIndirectAccelerationStructureInstanceDescriptor] = []
     var instanceBuffer: Buffer
     var scratchBuffer: Buffer! = nil
     var blasMap: [UInt64] = []
     private var allocated: Bool = false
 
     init(makeResidentNow: Bool = true) {
-        instanceBuffer = Buffer(size: MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.size * 16, makeResidentNow: makeResidentNow)
+        instanceBuffer = Buffer(
+            size: MemoryLayout<MTLIndirectAccelerationStructureInstanceDescriptor>.size * 32,
+            makeResidentNow: makeResidentNow)
         instanceBuffer.setName(name: "TLAS Instance Buffer")
 
         descriptor = MTL4InstanceAccelerationStructureDescriptor()
-        descriptor.instanceCount = 16
-        descriptor.instanceDescriptorType = .default
-        descriptor.instanceDescriptorBuffer = MTL4BufferRangeMake(instanceBuffer.getAddress(), UInt64(instanceBuffer.size))
+        descriptor.instanceCount = 32
+        descriptor.instanceDescriptorType = .indirect
+        descriptor.instanceDescriptorBuffer = MTL4BufferRangeMake(
+            instanceBuffer.getAddress(), UInt64(instanceBuffer.size))
+        descriptor.instanceDescriptorStride =
+            MemoryLayout<MTLIndirectAccelerationStructureInstanceDescriptor>.size
+        descriptor.instanceTransformationMatrixLayout = .columnMajor
 
         let sizes = RendererData.device.accelerationStructureSizes(descriptor: descriptor)
         tlas = RendererData.device.makeAccelerationStructure(size: sizes.accelerationStructureSize)!
@@ -48,50 +55,43 @@ class TLAS {
             RendererData.removeResidentAllocation(tlas)
         }
     }
-    
+
     func resetInstanceBuffer() {
         instanceDescriptors.removeAll()
         blasMap.removeAll()
     }
-    
-    func addInstance(blas: BLAS) {
-        var found = -1
-        for i in 0..<blasMap.count {
-            if blasMap[i] == blas.accelerationStructure.gpuResourceID._impl {
-                found = i
-                break
-            }
-        }
-        if found == -1 {
-            blasMap.append(blas.accelerationStructure.gpuResourceID._impl)
-            found = blasMap.count - 1
-        }
-        
-        var instanceDescriptor = MTLAccelerationStructureInstanceDescriptor()
-        instanceDescriptor.options = .nonOpaque
+
+    func addInstance(blas: BLAS, matrix: simd_float4x4 = simd_float4x4.identity) {
+        var instanceDescriptor = MTLIndirectAccelerationStructureInstanceDescriptor()
+        instanceDescriptor.options = .opaque
         instanceDescriptor.mask = 0xFF
-        instanceDescriptor.accelerationStructureIndex = UInt32(found)
-        instanceDescriptor.transformationMatrix.columns.0[0] = 1.0
-        instanceDescriptor.transformationMatrix.columns.1[1] = 1.0
-        instanceDescriptor.transformationMatrix.columns.2[2] = 1.0
-        
+        instanceDescriptor.accelerationStructureID = blas.accelerationStructure.gpuResourceID
+        for i in 0..<3 {
+            instanceDescriptor.transformationMatrix.columns.0[Int32(i)] = matrix.columns.0[i]
+            instanceDescriptor.transformationMatrix.columns.1[Int32(i)] = matrix.columns.1[i]
+            instanceDescriptor.transformationMatrix.columns.2[Int32(i)] = matrix.columns.2[i]
+            instanceDescriptor.transformationMatrix.columns.3[Int32(i)] = matrix.columns.3[i]
+        }
+
         instanceDescriptors.append(instanceDescriptor)
     }
-    
+
     func update() {
-        instanceDescriptors.withUnsafeBytes() { bytes in
-            instanceBuffer.write(bytes: bytes.baseAddress!, size: MemoryLayout<MTLAccelerationStructureInstanceDescriptor>.size * instanceDescriptors.count)
+        instanceDescriptors.withUnsafeBytes { bytes in
+            instanceBuffer.write(
+                bytes: bytes.baseAddress!,
+                size: bytes.count)
         }
     }
-    
+
     func getResourceID() -> UInt64 {
         return tlas.gpuResourceID._impl
     }
-    
+
     func setName(name: String) {
         tlas.label = name
     }
-    
+
     func destroyScratch() {
         scratchBuffer = nil
     }

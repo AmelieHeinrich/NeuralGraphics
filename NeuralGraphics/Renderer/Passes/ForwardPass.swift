@@ -26,13 +26,12 @@ class ForwardPass: Pass {
     init(settings: RendererSettings) {
         self.settings = settings
 
-        self.icbResetPipe = ComputePipeline(function: "reset_icb")
-        self.vertexCullPipe = ComputePipeline(function: "vertex_geometry_cull")
-        self.meshCullPipe = ComputePipeline(function: "mesh_geometry_cull")
+        self.icbResetPipe = ComputePipeline(function: "reset_icb", name: "Reset ICB")
+        self.vertexCullPipe = ComputePipeline(function: "vertex_geometry_cull", name: "Cull Instances (VS)")
+        self.meshCullPipe = ComputePipeline(function: "mesh_geometry_cull", name: "Cull Instances (MS)")
         self.vertexICB = ICB(inherit: false, commandTypes: .drawIndexed, maxCommandCount: 65536)
         self.vertexICB.setName(label: "Vertex Forward ICB")
-        self.meshICB = ICB(
-            inherit: false, commandTypes: .drawMeshThreadgroups, maxCommandCount: 65536)
+        self.meshICB = ICB(inherit: false, commandTypes: .drawMeshThreadgroups, maxCommandCount: 65536)
         self.meshICB.setName(label: "Mesh Forward ICB")
 
         var meshPipelineDesc = MeshPipelineDescriptor()
@@ -96,7 +95,7 @@ class ForwardPass: Pass {
             return
         }
         if settings.useMeshShader {
-            meshPathMTL3(context: context)
+            meshPathMTL4(context: context)
         } else {
             vertexPath(context: context)
         }
@@ -140,7 +139,7 @@ class ForwardPass: Pass {
 
         // Flush
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-        rp.consumerBarrier(before: .vertex, after: .dispatch)
+        rp.consumerBarrier(before: .vertex, after: [.dispatch, .accelerationStructure])
         rp.setPipeline(pipeline: pipeline)
         rp.executeIndirect(icb: vertexICB, maxCommandCount: 65536)
         rp.end()
@@ -223,27 +222,26 @@ class ForwardPass: Pass {
         cp.end()
 
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
-        rp.consumerBarrier(before: .object, after: .dispatch)
+        rp.consumerBarrier(before: .object, after: [.dispatch, .accelerationStructure])
         rp.setMeshPipeline(pipeline: meshPipeline)
-        rp.executeIndirect(icb: meshICB, maxCommandCount: 65536)
-        //rp.setBuffer(buf: context.sceneBuffer.buffer, index: 0, stages: [.mesh, .object, .fragment])
-        //var globalInstanceIdx: UInt32 = 0
-        //if let scene = context.scene {
-        //    for entity in scene.entities {
-        //        let model = entity.mesh
-        //        let lod = min(settings.forcedLOD, model.lodCount - 1)
-        //
-        //        for instance in model.instances {
-        //            rp.setBytes(allocator: context.allocator, index: 1, bytes: &globalInstanceIdx, size: MemoryLayout<UInt32>.size, stages: .object)
-        //            rp.dispatchMesh(
-        //                threadgroupsPerGrid: MTLSizeMake(1, 1, 1),
-        //                threadsPerObjectThreadgroup: MTLSizeMake(32, 1, 1),
-        //                threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1))
-        //
-        //            globalInstanceIdx += 1
-        //        }
-        //    }
-        //}
+        //rp.executeIndirect(icb: meshICB, maxCommandCount: 65536)
+        rp.setBuffer(buf: context.sceneBuffer.buffer, index: 0, stages: [.mesh, .object, .fragment])
+        var globalInstanceIdx: UInt32 = 0
+        if let scene = context.scene {
+            for entity in scene.entities {
+                let model = entity.mesh
+
+                for _ in model.instances {
+                    rp.setBytes(allocator: context.allocator, index: 1, bytes: &globalInstanceIdx, size: MemoryLayout<UInt32>.size, stages: .object)
+                    rp.dispatchMesh(
+                        threadgroupsPerGrid: MTLSizeMake(1, 1, 1),
+                        threadsPerObjectThreadgroup: MTLSizeMake(32, 1, 1),
+                        threadsPerMeshThreadgroup: MTLSizeMake(128, 1, 1))
+        
+                    globalInstanceIdx += 1
+                }
+            }
+        }
         rp.end()
     }
 }
