@@ -137,5 +137,5 @@ float4 forward_msfs(MSOut in [[stage_in]],
     bool occluded = (result.type == intersection_type::none);
     
     //float3 geometryColor = HashColor(result.geometry_id);
-    return float4(color.rgb * occluded, 1.0);
+    return float4(in.MeshletColor * occluded, 1.0);
 }
