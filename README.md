@@ -1,8 +1,8 @@
-# Neural Graphics
+# Pocketcat
 
 ![](.github/mar18.png)
 
-This repository showcases various modern rendering techniques implemented using Metal 4 API, focused on GPU driven rendering, raytracing and neural graphics.
+This repository showcases various modern rendering techniques implemented using Metal 4 API, focused on GPU driven rendering, raytracing and Pocketcat.
 
 ## Building and running
 
@@ -17,5 +17,7 @@ Just run the AssetBaker project first, then you can build and run the main proje
 
 ## Work in progress
 
+- GPU driven TLAS build
 - GPU driven meshlet culling and LOD selection
-- GPU driven acceleration structure building
+- Metal IO
+- Optimized alpha-tested raytracing with Metal per-primitive data
