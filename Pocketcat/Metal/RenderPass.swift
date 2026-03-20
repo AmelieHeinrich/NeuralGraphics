@@ -128,6 +128,15 @@ class RenderPass {
         self.encoder.executeCommands(buffer: icb.cmdBuffer, range: 0..<maxCommandCount)
     }
 
+    func setIFT(_ ift: MTLIntersectionFunctionTable, index: Int, stages: MTLRenderStages) {
+        if stages.contains(.vertex) {
+            RendererData.vertexTable.setResource(ift.gpuResourceID, bufferIndex: index)
+        }
+        if stages.contains(.fragment) {
+            RendererData.fragmentTable.setResource(ift.gpuResourceID, bufferIndex: index)
+        }
+    }
+
     func setTexture(texture: Texture, index: Int, stages: MTLRenderStages) {
         if stages.contains(.vertex) {
             RendererData.vertexTable.setTexture(texture.texture.gpuResourceID, index: index)

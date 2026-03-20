@@ -21,18 +21,27 @@ class TLASBuildPass: Pass {
                 return
             }
 
-            gpuBuild(context: context, scene: scene)
+            cpuBuild(context: context, scene: scene)
         }
     }
 
     func cpuBuild(context: FrameContext, scene: RenderScene) {
         scene.tlas.resetInstanceBuffer()
+        var instanceIdx: UInt32 = 0
         for entity in scene.entities {
-            for blas in entity.mesh.blases {
-                scene.tlas.addInstance(blas: blas, matrix: entity.transform)
+            for (blasIdx, blas) in entity.mesh.blases.enumerated() {
+                let materialIndex = Int(entity.mesh.instances[blasIdx].materialIndex)
+                let alphaMode = entity.mesh.materials[materialIndex].alphaMode
+                scene.tlas.addInstance(
+                    blas: blas,
+                    matrix: entity.transform,
+                    opaque: alphaMode == 0,
+                    userID: instanceIdx
+                )
+                instanceIdx += 1
             }
         }
-        scene.tlas.update()
+        scene.tlas.update(frameIdx: context.frameIndex)
 
         let cp = context.cmdBuffer.beginComputePass(name: "Build TLAS (CPU)")
         cp.buildTLAS(tlas: scene.tlas)
@@ -41,22 +50,28 @@ class TLASBuildPass: Pass {
 
     func gpuBuild(context: FrameContext, scene: RenderScene) {
         let instanceCount = context.sceneBuffer.instanceCount
+        
+        scene.tlas.updateFrameDescriptor(frameIdx: context.frameIndex)
 
         let cp = context.cmdBuffer.beginComputePass(name: "Build TLAS (GPU)")
-        cp.resetBuffer(src: scene.tlas.instanceCountBuffer)
-        cp.resetBuffer(src: scene.tlas.instanceBuffer)
-
+        cp.pushMarker(name: "Reset Buffers")
+        cp.resetBuffer(src: scene.tlas.instanceCountBuffers[context.frameIndex])
+        cp.resetBuffer(src: scene.tlas.instanceBuffers[context.frameIndex])
+        cp.popMarker()
+        
+        cp.pushMarker(name: "Cull Instances")
         cp.intraPassBarrier(before: .dispatch, after: .blit)
         cp.setPipeline(pipeline: cullPipe)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
-        cp.setBuffer(buf: scene.tlas.instanceBuffer, index: 1)
-        cp.setBuffer(buf: scene.tlas.instanceCountBuffer, index: 2)
-        cp.dispatch(
-            threads: MTLSizeMake((instanceCount + 63) / 64, 1, 1),
-            threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.setBuffer(buf: scene.tlas.instanceBuffers[context.frameIndex], index: 1)
+        cp.setBuffer(buf: scene.tlas.instanceCountBuffers[context.frameIndex], index: 2)
+        cp.dispatch(threads: MTLSizeMake((instanceCount + 63) / 64, 1, 1), threadsPerGroup: MTLSizeMake(64, 1, 1))
+        cp.popMarker()
 
+        cp.pushMarker(name: "Build TLAS")
         cp.intraPassBarrier(before: .accelerationStructure, after: .dispatch)
         cp.buildTLASIndirect(tlas: scene.tlas)
+        cp.popMarker()
         cp.end()
     }
 }

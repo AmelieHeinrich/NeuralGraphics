@@ -44,6 +44,10 @@ class ComputePass {
         RendererData.computeTable.setTexture(texture.gpuResourceID, index: index)
     }
 
+    func setIFT(_ ift: MTLIntersectionFunctionTable, index: Int) {
+        RendererData.computeTable.setResource(ift.gpuResourceID, bufferIndex: index)
+    }
+
     func setBytes(allocator: GPULinearAllocator, index: Int, bytes: UnsafeRawPointer, size: Int) {
         let offset = allocator.allocate(size: size)
         allocator.writeData(data: bytes, offset: offset, size: size)
@@ -68,16 +72,20 @@ class ComputePass {
         tlas.descriptor.instanceCount = tlas.instanceDescriptors.count
 
         self.encoder.build(
-            destinationAccelerationStructure: tlas.tlas, descriptor: tlas.descriptor,
+            destinationAccelerationStructure: tlas.tlas,
+            descriptor: tlas.descriptor,
             scratchBuffer: MTL4BufferRangeMake(
-                tlas.scratchBuffer.getAddress(), UInt64(tlas.scratchBuffer.size)))
+                tlas.scratchBuffer.getAddress(), UInt64(tlas.scratchBuffer.size))
+        )
     }
 
     func buildTLASIndirect(tlas: TLAS) {
         self.encoder.build(
-            destinationAccelerationStructure: tlas.tlas, descriptor: tlas.indirectDescriptor,
+            destinationAccelerationStructure: tlas.tlas,
+            descriptor: tlas.indirectDescriptor,
             scratchBuffer: MTL4BufferRangeMake(
-                tlas.scratchBuffer.getAddress(), UInt64(tlas.scratchBuffer.size)))
+                tlas.scratchBuffer.getAddress(), UInt64(tlas.scratchBuffer.size))
+        )
     }
 
     func copyTexture(src: Texture, dst: Texture) {

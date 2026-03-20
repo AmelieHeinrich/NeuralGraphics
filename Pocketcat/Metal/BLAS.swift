@@ -34,7 +34,7 @@ class BLAS {
         geometry.indexType = .uint32
         geometry.opaque = true
         if !mesh.materials.isEmpty {
-            geometry.opaque = mesh.materials[Int(instance.materialIndex)].alphaMode == 1
+            geometry.opaque = mesh.materials[Int(instance.materialIndex)].alphaMode == 0
         }
         geometries.append(geometry)
 

@@ -8,45 +8,47 @@
 import Metal
 import simd
 
+let FRAMES_IN_FLIGHT = 3
+
 class TLAS {
     var tlas: MTLAccelerationStructure
     var descriptor: MTL4InstanceAccelerationStructureDescriptor
     var indirectDescriptor: MTL4IndirectInstanceAccelerationStructureDescriptor
     var instanceDescriptors: [MTLIndirectAccelerationStructureInstanceDescriptor] = []
-    var instanceBuffer: Buffer
-    var instanceCountBuffer: Buffer
+    var instanceBuffers: [Buffer] = []
+    var instanceCountBuffers: [Buffer] = []
     var scratchBuffer: Buffer! = nil
     var blasMap: [UInt64] = []
     private var allocated: Bool = false
 
     init(makeResidentNow: Bool = true) {
-        instanceCountBuffer = Buffer(
-            size: MemoryLayout<UInt32>.size, makeResidentNow: makeResidentNow)
-        instanceCountBuffer.setName(name: "TLAS Instance Count Buffer")
+        for i in 0..<FRAMES_IN_FLIGHT {
+            let countBuf = Buffer(size: MemoryLayout<UInt32>.size, makeResidentNow: makeResidentNow)
+            countBuf.setName(name: "TLAS Instance Count Buffer [\(i)]")
+            instanceCountBuffers.append(countBuf)
 
-        instanceBuffer = Buffer(
-            size: MemoryLayout<MTLIndirectAccelerationStructureInstanceDescriptor>.size * 65536,
-            makeResidentNow: makeResidentNow)
-        instanceBuffer.setName(name: "TLAS Instance Buffer")
+            let instBuf = Buffer(
+                size: MemoryLayout<MTLIndirectAccelerationStructureInstanceDescriptor>.size * 65536,
+                makeResidentNow: makeResidentNow)
+            instBuf.setName(name: "TLAS Instance Buffer [\(i)]")
+            instanceBuffers.append(instBuf)
+        }
 
         descriptor = MTL4InstanceAccelerationStructureDescriptor()
         descriptor.instanceCount = 65536
         descriptor.instanceDescriptorType = .indirect
         descriptor.instanceDescriptorBuffer = MTL4BufferRangeMake(
-            instanceBuffer.getAddress(), UInt64(instanceBuffer.size))
+            instanceBuffers[0].getAddress(), UInt64(instanceBuffers[0].size))
         descriptor.instanceDescriptorStride =
             MemoryLayout<MTLIndirectAccelerationStructureInstanceDescriptor>.stride
         descriptor.instanceTransformationMatrixLayout = .columnMajor
 
+        // indirectDescriptor is updated per-frame in updateFrameDescriptor()
         indirectDescriptor = MTL4IndirectInstanceAccelerationStructureDescriptor()
         indirectDescriptor.maxInstanceCount = 65536
         indirectDescriptor.instanceDescriptorType = .indirect
-        indirectDescriptor.instanceDescriptorBuffer = MTL4BufferRangeMake(
-            instanceBuffer.getAddress(), UInt64(instanceBuffer.size))
         indirectDescriptor.instanceDescriptorStride =
             MemoryLayout<MTLIndirectAccelerationStructureInstanceDescriptor>.stride
-        indirectDescriptor.instanceCountBuffer = MTL4BufferRangeMake(
-            instanceCountBuffer.getAddress(), UInt64(instanceCountBuffer.size))
         indirectDescriptor.instanceTransformationMatrixLayout = .columnMajor
 
         let sizes = RendererData.device.accelerationStructureSizes(descriptor: descriptor)
@@ -59,11 +61,21 @@ class TLAS {
         }
     }
 
+    // Call this at the start of gpuBuild, before encoding anything
+    func updateFrameDescriptor(frameIdx: Int) {
+        indirectDescriptor.instanceDescriptorBuffer = MTL4BufferRangeMake(
+            instanceBuffers[frameIdx].getAddress(), UInt64(instanceBuffers[frameIdx].size))
+        indirectDescriptor.instanceCountBuffer = MTL4BufferRangeMake(
+            instanceCountBuffers[frameIdx].getAddress(), UInt64(instanceCountBuffers[frameIdx].size))
+    }
+
     func makeResident() {
         guard !allocated else { return }
-        instanceBuffer.makeResident()
+        for i in 0..<FRAMES_IN_FLIGHT {
+            instanceBuffers[i].makeResident()
+            instanceCountBuffers[i].makeResident()
+        }
         scratchBuffer.makeResident()
-        instanceCountBuffer.makeResident()
         RendererData.addResidentAllocation(tlas)
         allocated = true
     }
@@ -80,13 +92,14 @@ class TLAS {
     }
 
     func addInstance(
-        blas: BLAS, matrix: simd_float4x4 = simd_float4x4.identity, opaque: Bool = true
+        blas: BLAS, matrix: simd_float4x4 = simd_float4x4.identity, opaque: Bool = true, userID: UInt32 = 0
     ) {
         var instanceDescriptor = MTLIndirectAccelerationStructureInstanceDescriptor()
         instanceDescriptor.options = opaque ? .opaque : .nonOpaque
         instanceDescriptor.mask = 0xFF
         instanceDescriptor.accelerationStructureID = blas.accelerationStructure.gpuResourceID
         instanceDescriptor.intersectionFunctionTableOffset = 0
+        instanceDescriptor.userID = userID
         instanceDescriptor.transformationMatrix.columns.0.x = matrix.columns.0.x
         instanceDescriptor.transformationMatrix.columns.0.y = matrix.columns.0.y
         instanceDescriptor.transformationMatrix.columns.0.z = matrix.columns.0.z
@@ -99,13 +112,12 @@ class TLAS {
         instanceDescriptor.transformationMatrix.columns.3.x = matrix.columns.3.x
         instanceDescriptor.transformationMatrix.columns.3.y = matrix.columns.3.y
         instanceDescriptor.transformationMatrix.columns.3.z = matrix.columns.3.z
-
         instanceDescriptors.append(instanceDescriptor)
     }
 
-    func update() {
+    func update(frameIdx: Int) {
         instanceDescriptors.withUnsafeBytes { bytes in
-            instanceBuffer.write(bytes: bytes.baseAddress!, size: bytes.count)
+            instanceBuffers[frameIdx].write(bytes: bytes.baseAddress!, size: bytes.count)
         }
     }
 

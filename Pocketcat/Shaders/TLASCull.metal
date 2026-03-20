@@ -1,5 +1,5 @@
 //
-//  TLASCull.swift
+//  TLASCull.metal
 //  Pocketcat
 //
 //  Created by Amélie Heinrich on 19/03/2026.
@@ -18,11 +18,12 @@ void cull_tlas(const device SceneBuffer& scene [[buffer(0)]],
     // TODO: cull
     SceneInstance instance = scene.Instances[instanceID];
     SceneEntity entity = scene.Entities[instance.EntityIndex];
+    SceneMaterial material = scene.Materials[instance.MaterialIndex];
     bool visible = true;
     if (visible) {
         uint index = atomic_fetch_add_explicit(instanceCount, 1u, memory_order_relaxed);
 
-        instances[index].options = MTLAccelerationStructureInstanceOptionOpaque;
+        instances[index].options = material.AlphaMode ? MTLAccelerationStructureInstanceOptionNonOpaque : MTLAccelerationStructureInstanceOptionOpaque;
         instances[index].userID = instanceID;
         instances[index].accelerationStructureID = instance.blas;
         instances[index].mask = 0xFF;

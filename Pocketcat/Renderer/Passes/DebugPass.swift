@@ -396,18 +396,19 @@ class DebugPass: Pass {
         let rp = context.cmdBuffer.beginRenderPass(descriptor: rpDesc)
         rp.consumerBarrier(before: .vertex, after: .dispatch)
         rp.setPipeline(pipeline: depthTex != nil ? pipelineDepth : pipelineNoDepth)
-        rp.setBytes(
-            allocator: context.allocator, index: 0, bytes: &data,
-            size: MemoryLayout<DebugData>.size, stages: .vertex)
-
+        rp.setBytes(allocator: context.allocator, index: 0, bytes: &data, size: MemoryLayout<DebugData>.size, stages: .vertex)
         if !vertices.isEmpty {
+            rp.pushMarker(name: "CPU Flush")
             rp.setBuffer(buf: vertexBuffers[context.frameIndex], index: 1, stages: .vertex)
             rp.draw(primitiveType: .line, vertexCount: vertices.count, vertexOffset: 0)
+            rp.popMarker()
         }
 
         let gpuBuf = context.sceneBuffer.debugVerticesBuffer(forFrame: context.frameIndex)
+        rp.pushMarker(name: "GPU Flush")
         rp.setBuffer(buf: gpuBuf, index: 1, stages: .vertex)
         rp.executeIndirect(icb: icb, maxCommandCount: 1)
+        rp.popMarker()
         rp.end()
     }
 }

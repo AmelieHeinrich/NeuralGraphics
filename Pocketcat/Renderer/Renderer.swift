@@ -70,8 +70,10 @@ class Renderer: NSObject, MetalViewDelegate {
     }
 
     func draw(in view: MTKView) {
-        guard let drawable = view.currentDrawable else { return }
-
-        frameManager.render(drawable: drawable)
+        autoreleasepool {
+            guard let drawable = view.currentDrawable else { return }
+            
+            frameManager.render(drawable: drawable)
+        }
     }
 }

@@ -126,16 +126,17 @@ class FrameManager {
 
         Input.shared.beginFrame()
     }
-
+    
     func setupTimelines(settings: RendererSettings) {
         // Initialize passes
         let forward = ForwardPass(settings: settings)
         let tonemap = TonemapPass(settings: settings)
         let debug = DebugPass.shared
         let tlas = TLASBuildPass()
+        let pathtracer = Pathtracer()
         debug.settings = settings
 
-        self.passes = [tlas, forward, tonemap, debug]
+        self.passes = [tlas, forward, pathtracer, tonemap, debug]
 
         // Desktop pipeline
         let desktopTimeline = RenderTimeline()
@@ -143,7 +144,14 @@ class FrameManager {
         desktopTimeline.addPass(forward)
         desktopTimeline.addPass(tonemap)
         desktopTimeline.addPass(debug)
+        
+        // Pathtrace pipeline
+        let pathtraceTimeline = RenderTimeline()
+        pathtraceTimeline.addPass(tlas)
+        pathtraceTimeline.addPass(pathtracer)
+        pathtraceTimeline.addPass(tonemap)
 
         self.desktopTimeline = desktopTimeline
+        self.pathtracedTimeline = pathtraceTimeline
     }
 }
