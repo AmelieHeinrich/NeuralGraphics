@@ -7,15 +7,13 @@
 
 #include "Common/Bindless.h"
 
-struct Triangle
-{
+struct Triangle {
     MeshVertex v0;
     MeshVertex v1;
     MeshVertex v2;
 };
 
-float3 ComputeBarycentrics3D(float3 p, float3 a, float3 b, float3 c)
-{
+float3 ComputeBarycentrics3D(float3 p, float3 a, float3 b, float3 c) {
     float3 v0 = b - a;
     float3 v1 = c - a;
     float3 v2 = p - a;
@@ -36,8 +34,7 @@ float3 ComputeBarycentrics3D(float3 p, float3 a, float3 b, float3 c)
     return float3(u, v, w);
 }
 
-Triangle FetchTriangle(const device SceneBuffer& scene, uint drawID, uint encodedPrimID)
-{
+Triangle FetchTriangle(const device SceneBuffer& scene, uint drawID, uint encodedPrimID) {
     SceneInstance instance = scene.Instances[drawID];
     SceneInstanceLOD lod = instance.LODs[0];
 
@@ -66,18 +63,15 @@ Triangle FetchTriangle(const device SceneBuffer& scene, uint drawID, uint encode
     return tri;
 }
 
-float2 Interpolate(float3 b, float2 a0, float2 a1, float2 a2)
-{
+float2 Interpolate(float3 b, float2 a0, float2 a1, float2 a2) {
     return b.x * a0 + b.y * a1 + b.z * a2;
 }
 
-float3 Interpolate(float3 b, float3 a0, float3 a1, float3 a2)
-{
+float3 Interpolate(float3 b, float3 a0, float3 a1, float3 a2) {
     return b.x * a0 + b.y * a1 + b.z * a2;
 }
 
-float4 Interpolate(float3 b, float4 t0, float4 t1, float4 t2)
-{
+float4 Interpolate(float3 b, float4 t0, float4 t1, float4 t2) {
     float4 t = t0 * b.x + t1 * b.y + t2 * b.z;
     return float4(normalize(t.xyz), t.w);
 }
@@ -99,9 +93,9 @@ void generate_gbuffer(const device SceneBuffer& scene [[buffer(0)]],
                         address::repeat, mip_filter::linear);
 
     float depth = depthTexture.read(gtid).x;
-    if (depth == 1.0f) {
-        albedoTexture.write(0, gtid);
-        normalTexture.write(0, gtid);
+    if (depth >= 1.0f) {
+        albedoTexture.write(float4(0, 0, 0, 1), gtid);
+        normalTexture.write(float4(0, 0, 0, 1), gtid);
         return;
     }
 
@@ -114,37 +108,74 @@ void generate_gbuffer(const device SceneBuffer& scene [[buffer(0)]],
     SceneEntity entity = scene.Entities[instance.EntityIndex];
     Triangle tri = FetchTriangle(scene, instance_id, primitive_id);
 
+    // 1. World Space Vertices
     float3 w0 = (entity.Transform * float4(tri.v0.Position, 1)).xyz;
     float3 w1 = (entity.Transform * float4(tri.v1.Position, 1)).xyz;
     float3 w2 = (entity.Transform * float4(tri.v2.Position, 1)).xyz;
 
+    // 2. Reconstruct Position
     float2 pixel_ndc = (float2(gtid) + 0.5) / resolution * 2.0 - 1.0;
     pixel_ndc.y = -pixel_ndc.y;
-
     float4 clipPos = float4(pixel_ndc, depth, 1.0);
     float4 worldPos4 = scene.Camera.InverseViewProjection * clipPos;
     float3 worldPos = worldPos4.xyz / worldPos4.w;
 
     float3 bary = ComputeBarycentrics3D(worldPos, w0, w1, w2);
 
-    float2 uv = Interpolate(bary, tri.v0.UV, tri.v1.UV, tri.v2.UV);
+    // 3. Ray-plane intersection for screen-space derivatives
+    float3 e1 = w1 - w0;
+    float3 e2 = w2 - w0;
+    float3 planeNormal = cross(e1, e2);
+
+    float2 pixel_ndc_dx = (float2(gtid.x + 1.0, gtid.y) + 0.5) / resolution * 2.0 - 1.0;
+    pixel_ndc_dx.y = -pixel_ndc_dx.y;
+    float4 pNear_dx4 = scene.Camera.InverseViewProjection * float4(pixel_ndc_dx, 0.0, 1.0);
+    float4 pFar_dx4 = scene.Camera.InverseViewProjection * float4(pixel_ndc_dx, 1.0, 1.0);
+    float3 ro_dx = pNear_dx4.xyz / pNear_dx4.w;
+    float3 rd_dx = normalize((pFar_dx4.xyz / pFar_dx4.w) - ro_dx);
+
+    float2 pixel_ndc_dy = (float2(gtid.x, gtid.y + 1.0) + 0.5) / resolution * 2.0 - 1.0;
+    pixel_ndc_dy.y = -pixel_ndc_dy.y;
+    float4 pNear_dy4 = scene.Camera.InverseViewProjection * float4(pixel_ndc_dy, 0.0, 1.0);
+    float4 pFar_dy4 = scene.Camera.InverseViewProjection * float4(pixel_ndc_dy, 1.0, 1.0);
+    float3 ro_dy = pNear_dy4.xyz / pNear_dy4.w;
+    float3 rd_dy = normalize((pFar_dy4.xyz / pFar_dy4.w) - ro_dy);
+
+    float t_dx = dot(w0 - ro_dx, planeNormal) / dot(rd_dx, planeNormal);
+    float3 w_dx = ro_dx + rd_dx * t_dx;
+
+    float t_dy = dot(w0 - ro_dy, planeNormal) / dot(rd_dy, planeNormal);
+    float3 w_dy = ro_dy + rd_dy * t_dy;
+
+    float3 bary_dx = ComputeBarycentrics3D(w_dx, w0, w1, w2);
+    float3 bary_dy = ComputeBarycentrics3D(w_dy, w0, w1, w2);
+
+    float2 uv0 = tri.v0.UV, uv1 = tri.v1.UV, uv2 = tri.v2.UV;
+    float2 uv = Interpolate(bary, uv0, uv1, uv2);
+    float2 uv_dx = Interpolate(bary_dx, uv0, uv1, uv2);
+    float2 uv_dy = Interpolate(bary_dy, uv0, uv1, uv2);
+
+    float2 ddx = uv_dx - uv;
+    float2 ddy = uv_dy - uv;
+
+    // 5. Normal and Tangent
     float3 normal = Interpolate(bary, tri.v0.Normal, tri.v1.Normal, tri.v2.Normal);
     float4 tangent = Interpolate(bary, tri.v0.Tangent, tri.v1.Tangent, tri.v2.Tangent);
+    float3 N = normalize(normal);
 
+    // 6. Sampling
     float4 albedoSample = material.hasAlbedo()
-        ? material.Albedo.sample(s, uv)
+        ? material.Albedo.sample(s, uv, gradient2d(ddx, ddy))
         : float4(0.8, 0.8, 0.8, 1.0);
-    float3 albedo = albedoSample.rgb;
 
-    float3 N = normal;
     if (material.hasNormal()) {
-        float3 T = normalize(tangent.xyz - dot(tangent.xyz, normal) * normal);
-        float3 B = cross(normal, T) * tangent.w;
-        float3x3 TBN = float3x3(T, B, normal);
-        float3 nMap = material.Normal.sample(s, uv).xyz * 2.0 - 1.0;
+        float3 T = normalize(tangent.xyz - dot(tangent.xyz, N) * N);
+        float3 B = cross(N, T) * tangent.w;
+        float3x3 TBN = float3x3(T, B, N);
+        float3 nMap = material.Normal.sample(s, uv, gradient2d(ddx, ddy)).xyz * 2.0 - 1.0;
         N = normalize(TBN * nMap);
     }
 
-    albedoTexture.write(float4(albedo, 1.0), gtid);
+    albedoTexture.write(float4(albedoSample.rgb, 1.0), gtid);
     normalTexture.write(float4(N, 1.0), gtid);
 }

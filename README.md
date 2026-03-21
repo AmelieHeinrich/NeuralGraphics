@@ -19,5 +19,5 @@ Just run the AssetBaker project first, then you can build and run the main proje
 
 ## Work in progress
 
-- GPU driven meshlet culling and LOD selection
+- Nanite
 - Pathtracing
