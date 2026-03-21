@@ -136,9 +136,10 @@ class FrameManager {
         let debug = DebugPass.shared
         let tlas = TLASBuildPass()
         let pathtracer = Pathtracer()
+        let deferred = DeferredPass()
         debug.settings = settings
 
-        self.passes = [tlas, cullViewPass, visibilityPass, pathtracer, tonemap, debug, gbufferPass]
+        self.passes = [tlas, cullViewPass, visibilityPass, pathtracer, tonemap, debug, gbufferPass, deferred]
 
         // Desktop pipeline
         let desktopTimeline = RenderTimeline()
@@ -146,6 +147,7 @@ class FrameManager {
         desktopTimeline.addPass(cullViewPass)
         desktopTimeline.addPass(visibilityPass)
         desktopTimeline.addPass(gbufferPass)
+        desktopTimeline.addPass(deferred)
         desktopTimeline.addPass(tonemap)
         desktopTimeline.addPass(debug)
         

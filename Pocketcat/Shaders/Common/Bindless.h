@@ -106,10 +106,10 @@ struct camera
     float4   position_and_near;   // .xyz = position, .w = near
     float4   direction_and_far;   // .xyz = direction, .w = far
 
-    float3 get_position()  const { return position_and_near.xyz;  }
-    float  get_near()      const { return position_and_near.w;    }
-    float3 get_direction() const { return direction_and_far.xyz;  }
-    float  get_far()       const { return direction_and_far.w;    }
+    const float3 get_position()  const { return position_and_near.xyz;  }
+    const float  get_near()      const { return position_and_near.w;    }
+    const float3 get_direction() const { return direction_and_far.xyz;  }
+    const float  get_far()       const { return direction_and_far.w;    }
 };
 
 struct debug_vertex

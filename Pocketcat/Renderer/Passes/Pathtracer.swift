@@ -44,6 +44,6 @@ class Pathtracer: Pass {
         cp.dispatch(threads: MTLSizeMake((colorTexture.texture.width + 7) / 8, (colorTexture.texture.height + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1))
         cp.end()
 
-        context.resources.register(colorTexture, for: "Forward.Color")
+        context.resources.register(colorTexture, for: "HDR")
     }
 }

@@ -31,6 +31,17 @@ class DeferredPass: Pass {
     }
 
     override func render(context: FrameContext) {
+        let depth = context.resources.get("GBuffer.Depth") as Texture?
+        let albedo = context.resources.get("GBuffer.Albedo") as Texture?
+        let normal = context.resources.get("GBuffer.Normal") as Texture?
+        let orm = context.resources.get("GBuffer.ORM") as Texture?
+        let emissive = context.resources.get("GBuffer.Emissive") as Texture?
+        
+        guard let depth = depth else { return }
+        guard let albedo = albedo else { return }
+        guard let normal = normal else { return }
+        guard let orm = orm else { return }
+        guard let emissive = emissive else { return }
         guard (context.scene != nil) else { return }
 
         ift.setBuffer(context.sceneBuffer.buffer.buffer, offset: 0, index: 0)
@@ -39,12 +50,17 @@ class DeferredPass: Pass {
         cp.consumerBarrier(before: .dispatch, after: [.dispatch, .accelerationStructure])
         cp.setPipeline(pipeline: pipeline)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
-        cp.setTexture(texture: self.colorTexture, index: 0)
         cp.setIFT(ift, index: 1)
+        cp.setTexture(texture: depth, index: 0)
+        cp.setTexture(texture: albedo, index: 1)
+        cp.setTexture(texture: normal, index: 2)
+        cp.setTexture(texture: orm, index: 3)
+        cp.setTexture(texture: emissive, index: 4)
+        cp.setTexture(texture: self.colorTexture, index: 5)
         cp.dispatch(threads: MTLSizeMake((colorTexture.texture.width + 7) / 8, (colorTexture.texture.height + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1))
         cp.end()
 
-        context.resources.register(colorTexture, for: "Forward.Color")
+        context.resources.register(colorTexture, for: "HDR")
     }
 }
 

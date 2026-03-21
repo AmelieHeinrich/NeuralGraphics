@@ -27,7 +27,7 @@ class TonemapPass: Pass {
     }
 
     override func render(context: FrameContext) {
-        let forward = context.resources.get("Forward.Color") as Texture?
+        let forward = context.resources.get("HDR") as Texture?
         guard let forward = forward else { return }
 
         var gamma = settings.tonemapGamma

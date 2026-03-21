@@ -71,7 +71,7 @@ class GBufferPass: Pass {
         cp.dispatch(threads: MTLSizeMake(tgW, tgH, 1), threadsPerGroup: MTLSizeMake(8, 8, 1))
         cp.end()
 
-        context.resources.register(albedoTexture, for: "Forward.Color")
+        context.resources.register(albedoTexture, for: "GBuffer.Albedo")
         context.resources.register(normalTexture, for: "GBuffer.Normal")
         context.resources.register(ormTexture, for: "GBuffer.ORM")
         context.resources.register(emissiveTexture, for: "GBuffer.Emissive")
