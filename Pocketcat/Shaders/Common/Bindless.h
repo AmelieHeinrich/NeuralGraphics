@@ -15,34 +15,34 @@ using namespace raytracing;
 
 constant constexpr uint kMaxLODs = 5;
 
-struct MeshVertex
+struct mesh_vertex
 {
-    packed_float3 Position;
-    packed_float3 Normal;
-    float2        UV;
-    float4        Tangent;
+    packed_float3 position;
+    packed_float3 normal;
+    float2        uv;
+    float4        tangent;
 };
 
-struct MeshMeshlet
+struct meshlet
 {
-    uint VertexOffset;
-    uint TriangleOffset;
-    uint VertexCount;
-    uint TriangleCount;
+    uint vertex_offset;
+    uint triangle_offset;
+    uint vertex_count;
+    uint triangle_count;
 };
 
-struct MeshMeshletBounds
+struct meshlet_bounds
 {
-    float3   Center;
-    float    Radius;
-    float3   ConeApex;
-    float3   ConeAxis;
-    float    ConeCutoff;
-    int8_t   ConeAxisS8[3];
-    int8_t   ConeCutoffS8;
+    float3   center;
+    float    radius;
+    float3   cone_apex;
+    float3   cone_axis;
+    float    cone_cutoff;
+    int8_t   cone_axisS8[3];
+    int8_t   cone_cutoffS8;
 };
 
-enum SceneMaterialFlags : uint
+enum material_flags : uint
 {
     MaterialFlag_HasAlbedo   = (1 << 0),
     MaterialFlag_HasNormal   = (1 << 1),
@@ -51,105 +51,138 @@ enum SceneMaterialFlags : uint
     MaterialFlag_IsOpaque    = (1 << 4),
 };
 
-struct SceneMaterial
+struct material
 {
-    texture2d<float> Albedo;
-    texture2d<float> Normal;
-    texture2d<float> ORM;
-    texture2d<float> Emissive;
-    uint Flags;
-    uint AlphaMode;
+    texture2d<float> albedo;
+    texture2d<float> normal;
+    texture2d<float> orm;
+    texture2d<float> emissive;
+    uint flags;
+    uint alpha_mode;
 
-    bool hasAlbedo()   const { return Flags & MaterialFlag_HasAlbedo;   }
-    bool hasNormal()   const { return Flags & MaterialFlag_HasNormal;   }
-    bool hasORM()      const { return Flags & MaterialFlag_HasORM;      }
-    bool hasEmissive() const { return Flags & MaterialFlag_HasEmissive; }
-    bool isOpaque()    const { return Flags & MaterialFlag_IsOpaque;    }
+    bool has_albedo()   const { return flags & MaterialFlag_HasAlbedo;   }
+    bool has_normal()   const { return flags & MaterialFlag_HasNormal;   }
+    bool has_orm()      const { return flags & MaterialFlag_HasORM;      }
+    bool has_emissive() const { return flags & MaterialFlag_HasEmissive; }
+    bool is_opaque()    const { return flags & MaterialFlag_IsOpaque;    }
 };
 
-struct SceneInstanceLOD
+struct instance_lod
 {
-    const device uint*              IndexBuffer;
-    const device MeshMeshlet*       Meshlets;
-    const device MeshVertex*        MeshletVertices;
-    const device uchar*             MeshletTriangles;
-    const device MeshMeshletBounds* MeshletBounds;
-    uint IndexCount;
-    uint MeshletCount;
+    const device uint* index_buffer;
+    const device meshlet* meshlets;
+    const device mesh_vertex* meshlet_vertices;
+    const device uchar* meshlet_triangles;
+    const device meshlet_bounds* meshlet_bounds;
+    uint index_count;
+    uint meshlet_count;
 };
 
-struct SceneInstance
+struct instance
 {
-    const device MeshVertex* VertexBuffer;
+    const device mesh_vertex* vertex_buffer;
     MTLResourceID blas;
-    uint MaterialIndex;
-    uint EntityIndex;
-    uint LODCount;
-    float3 AABBMin;
-    float3 AABBMax;
-    SceneInstanceLOD LODs[kMaxLODs];
+    uint material_index;
+    uint entity_index;
+    uint lod_count;
+    float3 aabb_min;
+    float3 aabb_max;
+    instance_lod lods[kMaxLODs];
 };
 
-struct SceneEntity
+struct entity
 {
-    float4x4 Transform;
+    float4x4 transform;
 };
 
-struct SceneCamera
+struct camera
 {
-    float4x4 View;
-    float4x4 Projection;
-    float4x4 ViewProjection;
-    float4x4 InverseView;
-    float4x4 InverseProjection;
-    float4x4 InverseViewProjection;
-    float4   PositionAndNear;   // .xyz = position, .w = near
-    float4   DirectionAndFar;   // .xyz = direction, .w = far
+    float4x4 view;
+    float4x4 projection;
+    float4x4 view_projection;
+    float4x4 inverse_view;
+    float4x4 inverse_projection;
+    float4x4 inverse_view_projection;
+    float4   position_and_near;   // .xyz = position, .w = near
+    float4   direction_and_far;   // .xyz = direction, .w = far
 
-    float3 GetPosition()  const { return PositionAndNear.xyz;  }
-    float  GetNear()      const { return PositionAndNear.w;    }
-    float3 GetDirection() const { return DirectionAndFar.xyz;  }
-    float  GetFar()       const { return DirectionAndFar.w;    }
+    float3 get_position()  const { return position_and_near.xyz;  }
+    float  get_near()      const { return position_and_near.w;    }
+    float3 get_direction() const { return direction_and_far.xyz;  }
+    float  get_far()       const { return direction_and_far.w;    }
 };
 
-struct DebugVertex
+struct debug_vertex
 {
-    packed_float3 Position;
-    packed_float4 Color;
+    packed_float3 position;
+    packed_float4 color;
 };
 
-struct SceneBuffer
+struct scene_data
 {
-    const device SceneMaterial* Materials;
-    const device SceneInstance* Instances;
-    const device SceneEntity*   Entities;
-    instance_acceleration_structure AccelerationStructure;
+    const device material* materials;
+    const device instance* instances;
+    const device entity*   entities;
+    instance_acceleration_structure tlas;
 
-    SceneCamera Camera;
-    uint MaterialCount;
-    uint InstanceCount;
-    uint EntityCount;
+    camera camera;
+    uint material_count;
+    uint instance_count;
+    uint entity_count;
 
-    device DebugVertex* DebugVertices;
-    device atomic_uint* DebugVertexCount;
-    uint                MaxDebugVertices;
+    device debug_vertex* debug_vertices;
+    device atomic_uint* debug_vertex_count;
+    uint max_debug_vertices;
 };
 
-inline float3 HashColor(uint id)
-{
-    uint h = id;
-    h ^= h >> 16;
-    h *= 0x45d9f3b;
-    h ^= h >> 16;
+struct triangle {
+    mesh_vertex v0;
+    mesh_vertex v1;
+    mesh_vertex v2;
+};
 
-    float hue = float(h & 0xFFFF) / 65535.0;
-    hue = fmod(hue + 0.33, 1.0);
+inline triangle fetch_triangle_encoded(const device scene_data& scene, uint draw_id, uint encoded_prim_id) {
+    instance instance = scene.instances[draw_id];
+    instance_lod lod = instance.lods[0];
 
-    float s = 1.0;
-    float v = 1.0;
+    triangle tri;
+    if (encoded_prim_id & 0x80000000u) {
+        uint prim_id = encoded_prim_id & 0x7FFFFFFFu;
+        uint base = prim_id * 3;
+        uint i0 = lod.index_buffer[base];
+        uint i1 = lod.index_buffer[base + 1];
+        uint i2 = lod.index_buffer[base + 2];
+        tri.v0 = instance.vertex_buffer[i0];
+        tri.v1 = instance.vertex_buffer[i1];
+        tri.v2 = instance.vertex_buffer[i2];
+    } else {
+        uint meshlet_index = encoded_prim_id >> 8;
+        uint local_tri = encoded_prim_id & 0xFF;
+        meshlet m = lod.meshlets[meshlet_index];
+        uint tri_base = m.triangle_offset + local_tri * 3;
+        uint lv0 = lod.meshlet_triangles[tri_base + 0];
+        uint lv1 = lod.meshlet_triangles[tri_base + 1];
+        uint lv2 = lod.meshlet_triangles[tri_base + 2];
+        tri.v0 = lod.meshlet_vertices[m.vertex_offset + lv0];
+        tri.v1 = lod.meshlet_vertices[m.vertex_offset + lv1];
+        tri.v2 = lod.meshlet_vertices[m.vertex_offset + lv2];
+    }
+    return tri;
+}
 
-    float3 rgb = clamp(abs(fmod(hue * 6.0 + float3(0, 4, 2), 6.0) - 3.0) - 1.0, 0.0, 1.0);
-    return v * mix(float3(1, 1, 1), rgb, s);
+inline triangle fetch_triangle(const device scene_data& scene, uint draw_id, uint prim_id) {
+    instance instance = scene.instances[draw_id];
+    instance_lod lod = instance.lods[0];
+    triangle tri;
+    
+    uint base = prim_id * 3;
+    uint i0 = lod.index_buffer[base];
+    uint i1 = lod.index_buffer[base + 1];
+    uint i2 = lod.index_buffer[base + 2];
+    tri.v0 = instance.vertex_buffer[i0];
+    tri.v1 = instance.vertex_buffer[i1];
+    tri.v2 = instance.vertex_buffer[i2];
+    return tri;
 }
 
 #endif

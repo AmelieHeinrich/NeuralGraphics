@@ -5,7 +5,7 @@
 //  Created by Amélie Heinrich on 2026.
 //
 //  GPU-side debug draw primitives. Include this header from any shader that
-//  has access to a `device SceneBuffer*` and wants to emit debug geometry.
+//  has access to a `device scene_data*` and wants to emit debug geometry.
 //
 //  All functions are thread-safe: vertex slots are claimed with an atomic add,
 //  so multiple threads can call these simultaneously without races.
@@ -13,7 +13,7 @@
 //  Usage:
 //    #include "Common/DebugDraw.h"
 //
-//    kernel void myKernel(device SceneBuffer* scene [[buffer(0)]], ...) {
+//    kernel void myKernel(device scene_data* scene [[buffer(0)]], ...) {
 //        debug_draw_box(scene, aabbMin, aabbMax, float4(1, 0, 0, 1));
 //        debug_draw_box(scene, aabbMin, aabbMax, float4(1, 0, 0, 1), myTransform);
 //    }
@@ -30,18 +30,18 @@
 
 /// Appends one line segment (two vertices) to the GPU debug vertex buffer.
 /// If `transform` is not identity the endpoints are transformed before writing.
-static inline void _debug_line(device SceneBuffer* scene,
+static inline void _debug_line(device scene_data* scene,
                                 float3 from, float3 to, float4 color,
                                 float4x4 transform = float4x4(1.0f))
 {
     from = (transform * float4(from, 1.0f)).xyz;
     to   = (transform * float4(to,   1.0f)).xyz;
 
-    uint idx = atomic_fetch_add_explicit(scene->DebugVertexCount, 2u,
+    uint idx = atomic_fetch_add_explicit(scene->debug_vertex_count, 2u,
                                          memory_order_relaxed);
-    if (idx + 1u >= scene->MaxDebugVertices) return;
-    scene->DebugVertices[idx]     = { packed_float3(from), packed_float4(color) };
-    scene->DebugVertices[idx + 1] = { packed_float3(to),   packed_float4(color) };
+    if (idx + 1u >= scene->max_debug_vertices) return;
+    scene->debug_vertices[idx]     = { packed_float3(from), packed_float4(color) };
+    scene->debug_vertices[idx + 1] = { packed_float3(to),   packed_float4(color) };
 }
 
 /// Returns two orthogonal tangent vectors perpendicular to `n`.
@@ -53,7 +53,7 @@ static inline void _debug_basis(float3 n, thread float3& t, thread float3& b)
 }
 
 /// Draws a full circle in the plane perpendicular to `normal`.
-static inline void _debug_circle(device SceneBuffer* scene,
+static inline void _debug_circle(device scene_data* scene,
                                   float3 center, float3 normal, float radius,
                                   float4 color, int segments,
                                   float4x4 transform = float4x4(1.0f))
@@ -71,16 +71,16 @@ static inline void _debug_circle(device SceneBuffer* scene,
 }
 
 /// Draws an arc in the plane spanned by `axis1` and `axis2`.
-static inline void _debug_arc(device SceneBuffer* scene,
+static inline void _debug_arc(device scene_data* scene,
                                float3 center, float3 axis1, float3 axis2,
-                               float radius, float startAngle, float endAngle,
+                               float radius, float start_angle, float end_angle,
                                float4 color, int segments,
                                float4x4 transform = float4x4(1.0f))
 {
-    float step = (endAngle - startAngle) / float(segments);
+    float step = (end_angle - start_angle) / float(segments);
     for (int i = 0; i < segments; ++i) {
-        float a0 = startAngle + float(i)     * step;
-        float a1 = startAngle + float(i + 1) * step;
+        float a0 = start_angle + float(i)     * step;
+        float a1 = start_angle + float(i + 1) * step;
         float3 p0 = center + radius * (cos(a0) * axis1 + sin(a0) * axis2);
         float3 p1 = center + radius * (cos(a1) * axis1 + sin(a1) * axis2);
         _debug_line(scene, p0, p1, color, transform);
@@ -92,7 +92,7 @@ static inline void _debug_arc(device SceneBuffer* scene,
 // ---------------------------------------------------------------------------
 
 /// Draw a single line segment.
-inline void debug_draw_line(device SceneBuffer* scene,
+inline void debug_draw_line(device scene_data* scene,
                              float3 from, float3 to,
                              float4 color = float4(1),
                              float4x4 transform = float4x4(1.0f))
@@ -101,7 +101,7 @@ inline void debug_draw_line(device SceneBuffer* scene,
 }
 
 /// Wireframe axis-aligned box from `bmin` to `bmax`.
-inline void debug_draw_box(device SceneBuffer* scene,
+inline void debug_draw_box(device scene_data* scene,
                             float3 bmin, float3 bmax,
                             float4 color = float4(1),
                             float4x4 transform = float4x4(1.0f))
@@ -124,17 +124,17 @@ inline void debug_draw_box(device SceneBuffer* scene,
 }
 
 /// Wireframe cube centred at `center` with uniform `halfExtent`.
-inline void debug_draw_cube(device SceneBuffer* scene,
-                             float3 center, float halfExtent,
+inline void debug_draw_cube(device scene_data* scene,
+                             float3 center, float half_extent,
                              float4 color = float4(1),
                              float4x4 transform = float4x4(1.0f))
 {
-    float3 h = float3(halfExtent);
+    float3 h = float3(half_extent);
     debug_draw_box(scene, center - h, center + h, color, transform);
 }
 
 /// Wireframe sphere: three orthogonal great circles.
-inline void debug_draw_sphere(device SceneBuffer* scene,
+inline void debug_draw_sphere(device scene_data* scene,
                                float3 center, float radius,
                                float4 color = float4(1), int segments = 32,
                                float4x4 transform = float4x4(1.0f))
@@ -145,7 +145,7 @@ inline void debug_draw_sphere(device SceneBuffer* scene,
 }
 
 /// Wireframe capsule between `start` and `end` with the given `radius`.
-inline void debug_draw_capsule(device SceneBuffer* scene,
+inline void debug_draw_capsule(device scene_data* scene,
                                 float3 start, float3 end, float radius,
                                 float4 color = float4(1), int segments = 16,
                                 float4x4 transform = float4x4(1.0f))
@@ -172,13 +172,13 @@ inline void debug_draw_capsule(device SceneBuffer* scene,
 }
 
 /// Wireframe frustum from an inverse view-projection matrix (NDC → world).
-inline void debug_draw_frustum(device SceneBuffer* scene,
-                                float4x4 invViewProj,
+inline void debug_draw_frustum(device scene_data* scene,
+                                float4x4 inv_view_proj,
                                 float4 color = float4(1),
                                 float4x4 transform = float4x4(1.0f))
 {
     auto unproject = [&](float4 ndc) -> float3 {
-        float4 v = invViewProj * ndc;
+        float4 v = inv_view_proj * ndc;
         return v.xyz / v.w;
     };
     float3 nbl = unproject(float4(-1, -1, -1, 1)), nbr = unproject(float4( 1, -1, -1, 1));
@@ -198,7 +198,7 @@ inline void debug_draw_frustum(device SceneBuffer* scene,
 }
 
 /// Arrow with shaft and small cone head at `to`.
-inline void debug_draw_arrow(device SceneBuffer* scene,
+inline void debug_draw_arrow(device scene_data* scene,
                               float3 from, float3 to,
                               float4 color = float4(1),
                               float4x4 transform = float4x4(1.0f))
@@ -223,7 +223,7 @@ inline void debug_draw_arrow(device SceneBuffer* scene,
 }
 
 /// A circle (ring) in the plane defined by `normal`.
-inline void debug_draw_ring(device SceneBuffer* scene,
+inline void debug_draw_ring(device scene_data* scene,
                              float3 center, float3 normal, float radius,
                              float4 color = float4(1), int segments = 32,
                              float4x4 transform = float4x4(1.0f))
@@ -232,7 +232,7 @@ inline void debug_draw_ring(device SceneBuffer* scene,
 }
 
 /// Wireframe quad defined by four corners (in order).
-inline void debug_draw_quad(device SceneBuffer* scene,
+inline void debug_draw_quad(device scene_data* scene,
                              float3 v0, float3 v1, float3 v2, float3 v3,
                              float4 color = float4(1),
                              float4x4 transform = float4x4(1.0f))
@@ -242,7 +242,7 @@ inline void debug_draw_quad(device SceneBuffer* scene,
 }
 
 /// Wireframe cone from `tip` to a circular base centred at `base`.
-inline void debug_draw_cone(device SceneBuffer* scene,
+inline void debug_draw_cone(device scene_data* scene,
                              float3 tip, float3 base, float radius,
                              float4 color = float4(1), int segments = 16,
                              float4x4 transform = float4x4(1.0f))
@@ -262,7 +262,7 @@ inline void debug_draw_cone(device SceneBuffer* scene,
 }
 
 /// Wireframe cylinder between `start` and `end`.
-inline void debug_draw_cylinder(device SceneBuffer* scene,
+inline void debug_draw_cylinder(device scene_data* scene,
                                  float3 start, float3 end, float radius,
                                  float4 color = float4(1), int segments = 16,
                                  float4x4 transform = float4x4(1.0f))
@@ -283,7 +283,7 @@ inline void debug_draw_cylinder(device SceneBuffer* scene,
 }
 
 /// RGB XYZ axis gizmo at `origin` (X=red, Y=green, Z=blue).
-inline void debug_draw_axes(device SceneBuffer* scene,
+inline void debug_draw_axes(device scene_data* scene,
                              float3 origin, float size = 1.0f,
                              float4x4 transform = float4x4(1.0f))
 {

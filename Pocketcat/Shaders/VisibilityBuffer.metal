@@ -12,129 +12,128 @@ using namespace metal;
 
 #define AS_GROUP_SIZE 32
 
-struct Payload {
-    uint InstanceIndex;
+struct payload {
+    uint instance_index;
 };
 
-struct VSOut {
-    float4 Position [[position]];
-    float2 UV;
-    uint InstanceID [[flat]];
-    uint MeshletIndex [[flat]];
+struct vs_out {
+    float4 position [[position]];
+    float2 uv;
+    uint instance_id [[flat]];
+    uint meshlet_index [[flat]];
 };
 
-struct FSOut {
+struct fs_out {
     uint2 tri_instance_id;
 };
 
-using MeshOutput = mesh<VSOut, void, 64, 128, topology::triangle>;
+using mesh_output = mesh<vs_out, void, 64, 128, topology::triangle>;
 
-static inline void alphaTest(VSOut in, const device SceneBuffer& scene) {
-    SceneInstance inst = scene.Instances[in.InstanceID];
-    SceneMaterial mat  = scene.Materials[inst.MaterialIndex];
-    if (mat.AlphaMode == 1 && mat.hasAlbedo()) {
+static inline void alpha_test(vs_out in, const device scene_data& scene) {
+    instance inst = scene.instances[in.instance_id];
+    material mat  = scene.materials[inst.material_index];
+    if (mat.alpha_mode == 1 && mat.has_albedo()) {
         constexpr sampler s(filter::linear, address::repeat);
-        if (mat.Albedo.sample(s, in.UV).a < 0.5) discard_fragment();
+        if (mat.albedo.sample(s, in.uv).a < 0.5) discard_fragment();
     }
 }
 
 [[object]]
-void visibility_os(const device SceneBuffer& scene [[buffer(0)]],
-                   const device uint* instanceIndex [[buffer(1)]],
+void visibility_os(const device scene_data& scene [[buffer(0)]],
+                   const device uint* instance_index [[buffer(1)]],
                    uint gtid [[thread_position_in_threadgroup]],
-                   object_data Payload& outPayload [[payload]],
-                   mesh_grid_properties outGrid) {
+                   object_data payload& out_payload [[payload]],
+                   mesh_grid_properties out_grid) {
     if (gtid == 0) {
-        uint instance = *instanceIndex;
-        if (instance >= scene.InstanceCount) return;
+        uint instance_id = *instance_index;
+        if (instance_id >= scene.instance_count) return;
 
-        SceneInstance inst = scene.Instances[instance];
-        SceneInstanceLOD lod = inst.LODs[0];
-        outPayload.InstanceIndex = instance;
+        instance inst = scene.instances[instance_id];
+        instance_lod lod = inst.lods[0];
+        out_payload.instance_index = instance_id;
 
-        outGrid.set_threadgroups_per_grid(uint3(lod.MeshletCount, 1, 1));
+        out_grid.set_threadgroups_per_grid(uint3(lod.meshlet_count, 1, 1));
     }
 }
 
 [[mesh]]
-void visibility_ms(device SceneBuffer& scene [[buffer(0)]],
-                   object_data const Payload& payload [[payload]],
+void visibility_ms(device scene_data& scene [[buffer(0)]],
+                   object_data const payload& payload [[payload]],
                    uint gtid [[thread_position_in_threadgroup]],
                    uint gid [[threadgroup_position_in_grid]],
-                   MeshOutput outMesh) {
-    uint instanceIndex = payload.InstanceIndex;
-    uint meshletIndex = gid;
+                   mesh_output out_mesh) {
+    uint instance_index = payload.instance_index;
+    uint meshlet_idx = gid;
 
-    SceneInstance inst = scene.Instances[instanceIndex];
-    SceneEntity entity = scene.Entities[inst.EntityIndex];
-    SceneInstanceLOD lod = inst.LODs[0];
+    instance inst = scene.instances[instance_index];
+    entity entity = scene.entities[inst.entity_index];
+    instance_lod lod = inst.lods[0];
 
-    if (meshletIndex >= lod.MeshletCount) {
-        outMesh.set_primitive_count(0);
+    if (meshlet_idx >= lod.meshlet_count) {
+        out_mesh.set_primitive_count(0);
         return;
     }
 
-    MeshMeshlet m = lod.Meshlets[meshletIndex];
-    outMesh.set_primitive_count(m.TriangleCount);
+    meshlet m = lod.meshlets[meshlet_idx];
+    out_mesh.set_primitive_count(m.triangle_count);
 
-    if (gtid < m.TriangleCount) {
-        uint triBase = m.TriangleOffset + gtid * 3;
-        outMesh.set_index(gtid * 3 + 0, lod.MeshletTriangles[triBase + 0]);
-        outMesh.set_index(gtid * 3 + 1, lod.MeshletTriangles[triBase + 1]);
-        outMesh.set_index(gtid * 3 + 2, lod.MeshletTriangles[triBase + 2]);
+    if (gtid < m.triangle_count) {
+        uint tri_base = m.triangle_offset + gtid * 3;
+        out_mesh.set_index(gtid * 3 + 0, lod.meshlet_triangles[tri_base + 0]);
+        out_mesh.set_index(gtid * 3 + 1, lod.meshlet_triangles[tri_base + 1]);
+        out_mesh.set_index(gtid * 3 + 2, lod.meshlet_triangles[tri_base + 2]);
     }
 
-    if (gtid < m.VertexCount) {
-        uint vertexIndex = m.VertexOffset + gtid;
-        MeshVertex v = lod.MeshletVertices[vertexIndex];
-        float4 worldPos = entity.Transform * float4(v.Position, 1.0f);
+    if (gtid < m.vertex_count) {
+        uint vertex_idx = m.vertex_offset + gtid;
+        mesh_vertex v = lod.meshlet_vertices[vertex_idx];
+        float4 world_pos = entity.transform * float4(v.position, 1.0f);
 
-        VSOut vtx;
-        vtx.Position     = scene.Camera.Projection * scene.Camera.View * worldPos;
-        vtx.UV           = v.UV;
-        vtx.InstanceID   = instanceIndex;
-        vtx.MeshletIndex = meshletIndex;
+        vs_out vtx;
+        vtx.position = scene.camera.projection * scene.camera.view * world_pos;
+        vtx.uv = v.uv;
+        vtx.instance_id = instance_index;
+        vtx.meshlet_index = meshlet_idx;
 
-        outMesh.set_vertex(gtid, vtx);
+        out_mesh.set_vertex(gtid, vtx);
     }
 }
 
 [[vertex]]
-VSOut visibility_vs(uint vid [[vertex_id]],
-                    const device SceneBuffer& scene [[buffer(0)]],
-                    const device uint& instanceID [[buffer(1)]],
-                    uint instanceIndex [[base_instance]]) {
-    SceneInstance inst = scene.Instances[instanceIndex];
-    SceneEntity entity = scene.Entities[inst.EntityIndex];
+vs_out visibility_vs(uint vid [[vertex_id]],
+                     const device scene_data& scene [[buffer(0)]],
+                     uint instance_index [[base_instance]]) {
+    instance inst = scene.instances[instance_index];
+    entity entity = scene.entities[inst.entity_index];
 
-    MeshVertex v = inst.VertexBuffer[vid];
+    mesh_vertex v = inst.vertex_buffer[vid];
 
-    float4 worldPos = entity.Transform * float4(v.Position, 1.0f);
+    float4 world_pos = entity.transform * float4(v.position, 1.0f);
 
-    VSOut out;
-    out.Position     = scene.Camera.ViewProjection * worldPos;
-    out.UV           = v.UV;
-    out.InstanceID   = instanceIndex;
-    out.MeshletIndex = 0xFFFFFFFF;
+    vs_out out;
+    out.position = scene.camera.view_projection * world_pos;
+    out.uv = v.uv;
+    out.instance_id = instance_index;
+    out.meshlet_index = 0xFFFFFFFF;
     return out;
 }
 
 [[fragment]]
-FSOut visibility_fs_ms(VSOut in [[stage_in]],
-                       uint primID [[primitive_id]],
-                       const device SceneBuffer& scene [[buffer(0)]]) {
-    alphaTest(in, scene);
-    FSOut out;
-    out.tri_instance_id = uint2((in.MeshletIndex << 8) | (primID & 0xFF), in.InstanceID);
+fs_out visibility_fs_ms(vs_out in [[stage_in]],
+                        uint prim_id [[primitive_id]],
+                        const device scene_data& scene [[buffer(0)]]) {
+    alpha_test(in, scene);
+    fs_out out;
+    out.tri_instance_id = uint2((in.meshlet_index << 8) | (prim_id & 0xFF), in.instance_id);
     return out;
 }
 
 [[fragment]]
-FSOut visibility_fs_vs(VSOut in [[stage_in]],
-                       uint primID [[primitive_id]],
-                       const device SceneBuffer& scene [[buffer(0)]]) {
-    alphaTest(in, scene);
-    FSOut out;
-    out.tri_instance_id = uint2(0x80000000u | primID, in.InstanceID);
+fs_out visibility_fs_vs(vs_out in [[stage_in]],
+                        uint prim_id [[primitive_id]],
+                        const device scene_data& scene [[buffer(0)]]) {
+    alpha_test(in, scene);
+    fs_out out;
+    out.tri_instance_id = uint2(0x80000000u | prim_id, in.instance_id);
     return out;
 }

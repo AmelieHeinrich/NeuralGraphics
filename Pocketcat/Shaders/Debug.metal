@@ -10,46 +10,46 @@ using namespace metal;
 
 #include "Common/Bindless.h"
 
-struct DebugVSOut {
-    float4 Position [[position]];
-    float4 Color;
+struct vs_out {
+    float4 position [[position]];
+    float4 color;
 };
 
-struct DebugData {
-    float4x4 Camera;
+struct debug_data {
+    float4x4 camera;
 };
 
-struct DebugICBWrapper {
-    command_buffer CommandBuffer;
+struct debug_icb_wrapper {
+    command_buffer cmd_buffer;
 };
 
 [[vertex]]
-DebugVSOut debug_vs(uint id [[vertex_id]],
-                    const device DebugData&    data     [[buffer(0)]],
-                    const device DebugVertex*  vertices [[buffer(1)]]) {
-    DebugVSOut out;
-    out.Position = data.Camera * float4(vertices[id].Position, 1.0f);
-    out.Color    = vertices[id].Color;
+vs_out debug_vs(uint id [[vertex_id]],
+                const device debug_data& data [[buffer(0)]],
+                const device debug_vertex* vertices [[buffer(1)]]) {
+    vs_out out;
+    out.position = data.camera * float4(vertices[id].position, 1.0f);
+    out.color = vertices[id].color;
     return out;
 }
 
 [[fragment]]
-float4 debug_fs(DebugVSOut in [[stage_in]]) {
-    return in.Color;
+float4 debug_fs(vs_out in [[stage_in]]) {
+    return in.color;
 }
 
 [[kernel]]
-void debug_generate_icb(device SceneBuffer* scene [[buffer(0)]],
-                        device DebugICBWrapper& icb [[buffer(1)]],
-                        uint threadID [[thread_position_in_grid]]) {
-    if (threadID > 0) return;
+void debug_generate_icb(device scene_data* scene [[buffer(0)]],
+                        device debug_icb_wrapper& icb [[buffer(1)]],
+                        uint tid [[thread_position_in_grid]]) {
+    if (tid > 0) return;
 
-    uint vertexCount = atomic_load_explicit(scene->DebugVertexCount, memory_order_relaxed);
+    uint vtx_count = atomic_load_explicit(scene->debug_vertex_count, memory_order_relaxed);
 
-    render_command cmd(icb.CommandBuffer, threadID);
-    if (vertexCount > 0) {
+    render_command cmd(icb.cmd_buffer, tid);
+    if (vtx_count > 0) {
         // Bind the GPU debug vertex buffer and generate a single draw call
-        cmd.set_vertex_buffer(scene->DebugVertices, 1);
-        cmd.draw_primitives(primitive_type::line, 0, vertexCount, 1, 0);
+        cmd.set_vertex_buffer(scene->debug_vertices, 1);
+        cmd.draw_primitives(primitive_type::line, 0, vtx_count, 1, 0);
     }
 }

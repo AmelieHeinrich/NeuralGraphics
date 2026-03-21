@@ -11,16 +11,16 @@ using namespace metal;
 using namespace simd;
 
 struct ICBWrapper {
-    command_buffer CommandBuffer;
+    command_buffer cmd_buffer;
 };
 
 [[kernel]]
 void reset_icb(device ICBWrapper& icb [[buffer(0)]],
-               constant uint& commandCount [[buffer(1)]],
-               uint threadID [[thread_position_in_grid]]) {
-    if (threadID >= commandCount) return;
-    uint commandIndex = threadID;
+               constant uint& cmd_count [[buffer(1)]],
+               uint tid [[thread_position_in_grid]]) {
+    if (tid >= cmd_count) return;
+    uint cmd_idx = tid;
 
-    render_command command(icb.CommandBuffer, commandIndex);
+    render_command command(icb.cmd_buffer, cmd_idx);
     command.reset();
 }

@@ -49,7 +49,11 @@ class VisibilityBufferPass: Pass {
         depthDesc.usage = [.shaderRead, .renderTarget, .shaderWrite]
         
         self.visibilityTexture = Texture(descriptor: visDesc)
+        self.visibilityTexture.setLabel(name: "Visibility Texture")
+        
         self.depthTexture = Texture(descriptor: depthDesc)
+        self.depthTexture.setLabel(name: "Visibility Depth")
+        
         self.settings = settings
         
         super.init()

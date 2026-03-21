@@ -10,12 +10,12 @@
 using namespace simd;
 using namespace metal;
 
-struct Parameters {
-    float Gamma;
+struct parameters {
+    float gamma;
 };
 
 // I'm using ACES Narcowicz here. TODO: Neural tonemap? >.>
-float3 Tonemap(float3 x) {
+float3 tonemap(float3 x) {
     float a = 2.51f;
     float b = 0.03f;
     float c = 2.43f;
@@ -24,13 +24,13 @@ float3 Tonemap(float3 x) {
     return saturate((x*(a*x+b))/(x*(c*x+d)+e));
 }
 
-struct TonemapVSOut {
+struct vs_output {
     float4 position [[position]];
     float2 uv;
 };
 
 [[vertex]]
-TonemapVSOut tonemap_vs(uint vid [[vertex_id]]) {
+vs_output tonemap_vs(uint vid [[vertex_id]]) {
     float2 positions[3] = {
         float2(-1.0,  1.0),
         float2( 3.0,  1.0),
@@ -41,7 +41,7 @@ TonemapVSOut tonemap_vs(uint vid [[vertex_id]]) {
         float2(2.0, 0.0),
         float2(0.0, 2.0)
     };
-    TonemapVSOut out;
+    vs_output out;
     out.position = float4(positions[vid], 0.0, 1.0);
     out.uv = uvs[vid];
     return out;
@@ -49,13 +49,13 @@ TonemapVSOut tonemap_vs(uint vid [[vertex_id]]) {
 
 [[fragment]]
 float4 tonemap_fs(
-    TonemapVSOut in [[stage_in]],
+   vs_output in [[stage_in]],
     texture2d<float> input [[texture(0)]],
-    constant Parameters& params [[buffer(0)]]
+    constant parameters& params [[buffer(0)]]
 ) {
     constexpr sampler s(filter::nearest, address::clamp_to_edge);
     float3 color = input.sample(s, in.uv).xyz;
-    float3 mappedColor = Tonemap(color);
-    mappedColor = pow(mappedColor, 1.0 / params.Gamma);
+    float3 mapped = tonemap(color);
+    mapped = pow(mapped, 1.0 / params.gamma);
     return float4(color, 1.0);
 }

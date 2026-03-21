@@ -12,6 +12,8 @@ class GBufferPass: Pass {
     private let pipe: ComputePipeline
     private var albedoTexture: Texture
     private var normalTexture: Texture
+    private var ormTexture: Texture
+    private var emissiveTexture: Texture
 
     override init() {
         pipe = ComputePipeline(function: "generate_gbuffer", name: "Generate GBuffer")
@@ -25,6 +27,16 @@ class GBufferPass: Pass {
         normalDesc.usage = [.shaderRead, .shaderWrite]
         self.normalTexture = Texture(descriptor: normalDesc)
         self.normalTexture.setLabel(name: "GBuffer Normal")
+        
+        let ormDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg8Unorm, width: 1, height: 1, mipmapped: false)
+        ormDesc.usage = [.shaderRead, .shaderWrite]
+        self.ormTexture = Texture(descriptor: ormDesc)
+        self.ormTexture.setLabel(name: "GBuffer ORM")
+        
+        let emissiveDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
+        emissiveDesc.usage = [.shaderRead, .shaderWrite]
+        self.emissiveTexture = Texture(descriptor: emissiveDesc)
+        self.emissiveTexture.setLabel(name: "GBuffer Emissive")
 
         super.init()
     }
@@ -32,6 +44,8 @@ class GBufferPass: Pass {
     override func resize(width: Int, height: Int) {
         albedoTexture.resize(width: width, height: height)
         normalTexture.resize(width: width, height: height)
+        ormTexture.resize(width: width, height: height)
+        emissiveTexture.resize(width: width, height: height)
     }
 
     override func render(context: FrameContext) {
@@ -52,10 +66,14 @@ class GBufferPass: Pass {
         cp.setTexture(texture: depth, index: 1)
         cp.setTexture(texture: albedoTexture, index: 2)
         cp.setTexture(texture: normalTexture, index: 3)
+        cp.setTexture(texture: ormTexture, index: 4)
+        cp.setTexture(texture: emissiveTexture, index: 5)
         cp.dispatch(threads: MTLSizeMake(tgW, tgH, 1), threadsPerGroup: MTLSizeMake(8, 8, 1))
         cp.end()
 
         context.resources.register(albedoTexture, for: "Forward.Color")
         context.resources.register(normalTexture, for: "GBuffer.Normal")
+        context.resources.register(ormTexture, for: "GBuffer.ORM")
+        context.resources.register(emissiveTexture, for: "GBuffer.Emissive")
     }
 }
