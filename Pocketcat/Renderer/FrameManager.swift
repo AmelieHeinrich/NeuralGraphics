@@ -31,6 +31,10 @@ class FrameManager {
     private let allocators: [GPULinearAllocator]
     private unowned let registry: SettingsRegistry
 
+    private var viewportWidth: Int = 1
+    private var viewportHeight: Int = 1
+    private var lastRenderScale: Float = -1.0
+
     private var sceneBuffer: SceneBufferBuilder
     private var mobileTimeline: RenderTimeline? = nil
     private var desktopTimeline: RenderTimeline? = nil
@@ -65,13 +69,29 @@ class FrameManager {
     }
 
     func resize(width: Int, height: Int) {
+        viewportWidth = width
+        viewportHeight = height
+        let scale = registry.float("Renderer.RenderScale", default: 1.0)
+        lastRenderScale = scale
+        let scaledW = max(1, Int(Float(width) * scale))
+        let scaledH = max(1, Int(Float(height) * scale))
         controller.resize(width: width, height: height)
         for pass in passes! {
-            pass.resize(width: width, height: height)
+            pass.resize(width: scaledW, height: scaledH)
         }
     }
 
     func render(drawable: CAMetalDrawable) {
+        let currentScale = registry.float("Renderer.RenderScale", default: 1.0)
+        if currentScale != lastRenderScale {
+            lastRenderScale = currentScale
+            let scaledW = max(1, Int(Float(viewportWidth) * currentScale))
+            let scaledH = max(1, Int(Float(viewportHeight) * currentScale))
+            for pass in passes! {
+                pass.resize(width: scaledW, height: scaledH)
+            }
+        }
+
         resources.clear()
 
         let ringIndex = Int(frameIndex) % maxFramesInFlight
@@ -130,6 +150,7 @@ class FrameManager {
     func setupTimelines(registry: SettingsRegistry) {
         // Register global settings first so they appear at the top of the UI
         registry.register(enum: "Renderer.Timeline", label: "Timeline", default: RendererTimelineType.Desktop)
+        registry.register(float: "Renderer.RenderScale", label: "Render Scale", default: 1.0, range: 0.10...1.0, step: 0.05)
 
         // Initialize passes
         let cullViewPass = CullViewPass(registry: registry)
