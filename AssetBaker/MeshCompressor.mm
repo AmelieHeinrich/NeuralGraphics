@@ -667,8 +667,8 @@ void CompressMesh(const std::string& in, const std::string& out)
         if (mat.emissive_texture.texture && mat.emissive_texture.texture->image)
             fillPath(mm.EmissivePath, sizeof(mm.EmissivePath), mat.emissive_texture.texture->image->uri);
 
-        // Store the alpha mode so the renderer can skip alpha testing for opaque materials.
-        mm.AlphaMode = static_cast<uint32_t>(mat.alpha_mode);
+        // 0 if opaque, 1 otherwise
+        mm.AlphaMode = mat.alpha_mode != cgltf_alpha_mode_opaque;
     }
 
     // ---- Collect primitive work items ---------------------------------------

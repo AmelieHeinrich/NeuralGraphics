@@ -29,5 +29,5 @@ bool alpha_any_hit(float2 bary [[barycentric_coord]],
     float2 uv = interpolate2D(bary, tri.v0.uv, tri.v1.uv, tri.v2.uv);
     
     float alpha = material.albedo.sample(s, uv).a;
-    return alpha > 0.25;
+    return alpha > 0.75;
 }

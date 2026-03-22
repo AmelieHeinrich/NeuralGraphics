@@ -35,9 +35,9 @@ using mesh_output = mesh<vs_out, void, 64, 128, topology::triangle>;
 static inline void alpha_test(vs_out in, const device scene_data& scene) {
     instance inst = scene.instances[in.instance_id];
     material mat  = scene.materials[inst.material_index];
-    if (mat.alpha_mode == 1 && mat.has_albedo()) {
+    if (mat.alpha_mode != 0 && mat.has_albedo()) {
         constexpr sampler s(filter::linear, address::repeat);
-        if (mat.albedo.sample(s, in.uv).a < 0.5) discard_fragment();
+        if (mat.albedo.sample(s, in.uv).a < 0.25) discard_fragment();
     }
 }
 
