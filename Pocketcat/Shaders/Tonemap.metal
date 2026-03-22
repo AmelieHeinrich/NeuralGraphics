@@ -57,5 +57,5 @@ float4 tonemap_fs(
     float3 color = input.sample(s, in.uv).xyz;
     float3 mapped = tonemap(color);
     mapped = pow(mapped, 1.0 / params.gamma);
-    return float4(color, 1.0);
+    return float4(mapped, 1.0);
 }

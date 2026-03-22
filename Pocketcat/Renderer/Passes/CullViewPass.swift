@@ -15,10 +15,11 @@ class CullViewPass: Pass {
     private var vertexICB: ICB
     private var meshICB: ICB
     private let instanceIDBuffer: Buffer
-    private unowned let settings: RendererSettings
-    
-    init(settings: RendererSettings) {
-        self.settings = settings
+    private unowned let registry: SettingsRegistry
+
+    init(registry: SettingsRegistry) {
+        self.registry = registry
+        registry.register(bool: "Visibility.MeshShader", label: "Mesh Shaders", default: true)
         
         self.icbResetPipe = ComputePipeline(function: "reset_icb", name: "Reset ICB")
         self.vertexPipe = ComputePipeline(function: "vertex_geometry_cull", name: "Cull Instances (VS)")
@@ -37,7 +38,7 @@ class CullViewPass: Pass {
     override func render(context: FrameContext) {
         guard (context.scene != nil) else { return }
         
-        if settings.useMeshShader {
+        if registry.bool("Visibility.MeshShader") {
             meshCull(context: context)
         } else {
             vertexCull(context: context)

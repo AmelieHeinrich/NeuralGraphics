@@ -24,7 +24,7 @@ private struct DebugData {
 class DebugPass: Pass {
     static let shared = DebugPass()
 
-    weak var settings: RendererSettings? = nil
+    weak var registry: SettingsRegistry? = nil
 
     private let pipelineNoDepth: RenderPipeline
     private let pipelineDepth: RenderPipeline
@@ -370,7 +370,7 @@ class DebugPass: Pass {
             }
         }
 
-        let useDepth = settings?.debugDepthTest == true
+        let useDepth = registry?.bool("Debug.DepthTest") ?? false
         let depthTex: Texture? = useDepth ? context.resources.get("GBuffer.Depth") : nil
 
         var rpDesc = RenderPassDescriptor()

@@ -29,7 +29,7 @@ class FrameManager {
     private let commandBuffers: [CommandBuffer]
     private let resources: ResourceRegistry = ResourceRegistry()
     private let allocators: [GPULinearAllocator]
-    private let settings: RendererSettings
+    private unowned let registry: SettingsRegistry
 
     private var sceneBuffer: SceneBufferBuilder
     private var mobileTimeline: RenderTimeline? = nil
@@ -38,8 +38,8 @@ class FrameManager {
 
     var scene: RenderScene?
 
-    init(settings: RendererSettings) {
-        self.settings = settings
+    init(registry: SettingsRegistry) {
+        self.registry = registry
         self.controller = EditorRendererController()
 
         self.commandBuffers = (0..<3).map { i in
@@ -53,7 +53,7 @@ class FrameManager {
         }
         self.sceneBuffer = SceneBufferBuilder()
 
-        setupTimelines(settings: settings)
+        setupTimelines(registry: registry)
     }
 
     func setScene(_ scene: RenderScene) {
@@ -103,7 +103,7 @@ class FrameManager {
             }
         }
 
-        switch settings.currentTimeline {
+        switch registry.enum("Renderer.Timeline", as: RendererTimelineType.self, default: .Desktop) {
         case .Mobile:
             controller.render(timeline: mobileTimeline!, context: &context)
         case .Desktop:
@@ -127,17 +127,21 @@ class FrameManager {
         Input.shared.beginFrame()
     }
     
-    func setupTimelines(settings: RendererSettings) {
+    func setupTimelines(registry: SettingsRegistry) {
+        // Register global settings first so they appear at the top of the UI
+        registry.register(enum: "Renderer.Timeline", label: "Timeline", default: RendererTimelineType.Desktop)
+
         // Initialize passes
-        let cullViewPass = CullViewPass(settings: settings)
-        let visibilityPass = VisibilityBufferPass(settings: settings)
+        let cullViewPass = CullViewPass(registry: registry)
+        let visibilityPass = VisibilityBufferPass(registry: registry)
         let gbufferPass = GBufferPass()
-        let tonemap = TonemapPass(settings: settings)
+        let tonemap = TonemapPass(registry: registry)
         let debug = DebugPass.shared
         let tlas = TLASBuildPass()
         let pathtracer = Pathtracer()
         let deferred = DeferredPass()
-        debug.settings = settings
+        registry.register(bool: "Debug.DepthTest", label: "Depth Test", default: false)
+        debug.registry = registry
 
         self.passes = [tlas, cullViewPass, visibilityPass, pathtracer, tonemap, debug, gbufferPass, deferred]
 

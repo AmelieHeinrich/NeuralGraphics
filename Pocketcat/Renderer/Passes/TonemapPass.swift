@@ -11,9 +11,9 @@ import simd
 
 class TonemapPass: Pass {
     private let pipeline: RenderPipeline
-    private unowned let settings: RendererSettings
+    private unowned let registry: SettingsRegistry
 
-    init(settings: RendererSettings) {
+    init(registry: SettingsRegistry) {
         var pipelineDesc = RenderPipelineDescriptor()
         pipelineDesc.name = "Tonemap"
         pipelineDesc.vertexFunction = "tonemap_vs"
@@ -21,7 +21,8 @@ class TonemapPass: Pass {
         pipelineDesc.pixelFormats = [.bgra8Unorm]
 
         self.pipeline = RenderPipeline(descriptor: pipelineDesc)
-        self.settings = settings
+        self.registry = registry
+        registry.register(float: "Tonemap.Gamma", label: "Gamma", default: 2.2, range: 1.0...3.0)
 
         super.init()
     }
@@ -30,7 +31,7 @@ class TonemapPass: Pass {
         let forward = context.resources.get("HDR") as Texture?
         guard let forward = forward else { return }
 
-        var gamma = settings.tonemapGamma
+        var gamma = registry.float("Tonemap.Gamma")
         var rpDesc = RenderPassDescriptor()
         rpDesc.setName(name: "Tonemap")
         rpDesc.addAttachment(texture: context.drawable.texture, shouldClear: false)

@@ -253,7 +253,7 @@ private struct PanelContainer<Content: View>: View {
 /// shared interior edges look seamless.
 private struct SideColumn: View {
     let side: PanelSide
-    let settings: RendererSettings
+    let registry: SettingsRegistry
     @Binding var activePanels: Set<String>
 
     private var visiblePanels: [PanelDef] {
@@ -283,7 +283,7 @@ private struct SideColumn: View {
                         ) {
                             switch panel.id {
                             case "about": AboutView()
-                            case "settings": SettingsView(settings: settings)
+                            case "settings": SettingsView(registry: registry)
                             default:
                                 PlaceholderPanelView(
                                     title: panel.label,
@@ -327,16 +327,16 @@ enum AppPhase {
 // MARK: - AppState
 
 private class AppState: ObservableObject {
-    let settings: RendererSettings
+    let registry: SettingsRegistry
     let renderer: Renderer
 
     init() {
         guard let device = MTLCreateSystemDefaultDevice() else {
             fatalError("This device does not support Metal.")
         }
-        let s = RendererSettings()
-        self.settings = s
-        self.renderer = Renderer(device: device, settings: s)
+        let r = SettingsRegistry()
+        self.registry = r
+        self.renderer = Renderer(device: device, registry: r)
     }
 }
 
@@ -356,8 +356,8 @@ private struct RenderView: View {
             MetalView(delegate: appState.renderer)
                 .ignoresSafeArea()
 
-            SideColumn(side: .left, settings: appState.settings, activePanels: $activePanels)
-            SideColumn(side: .right, settings: appState.settings, activePanels: $activePanels)
+            SideColumn(side: .left, registry: appState.registry, activePanels: $activePanels)
+            SideColumn(side: .right, registry: appState.registry, activePanels: $activePanels)
 
             VStack {
                 Spacer()

@@ -114,9 +114,8 @@ void generate_gbuffer(const device scene_data& scene [[buffer(0)]],
     }
     
     float3 orm = material.has_orm() ? material.orm.sample(s, uv, mip).rgb : float3(1, 0.5, 0);
-    float ao = orm.r;
     float roughness = clamp(orm.g, 0.04, 1.0);
-    float metallic  = orm.b;
+    float metallic = orm.b;
     
     float4 emissive_sample = material.has_emissive()
         ? material.emissive.sample(s, uv, mip)

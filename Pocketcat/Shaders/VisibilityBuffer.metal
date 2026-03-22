@@ -18,13 +18,16 @@ struct payload {
 
 struct vs_out {
     float4 position [[position]];
+    float4 curr_clip_pos;
+    float4 prev_clip_pos;
     float2 uv;
     uint instance_id [[flat]];
     uint meshlet_index [[flat]];
 };
 
 struct fs_out {
-    uint2 tri_instance_id;
+    uint2  tri_instance_id [[color(0)]];
+    float2 motion_vector   [[color(1)]];
 };
 
 using mesh_output = mesh<vs_out, void, 64, 128, topology::triangle>;
@@ -88,11 +91,14 @@ void visibility_ms(device scene_data& scene [[buffer(0)]],
         uint vertex_idx = m.vertex_offset + gtid;
         mesh_vertex v = lod.meshlet_vertices[vertex_idx];
         float4 world_pos = entity.transform * float4(v.position, 1.0f);
+        float4 clip_pos  = scene.camera.projection * scene.camera.view * world_pos;
 
         vs_out vtx;
-        vtx.position = scene.camera.projection * scene.camera.view * world_pos;
-        vtx.uv = v.uv;
-        vtx.instance_id = instance_index;
+        vtx.position      = clip_pos;
+        vtx.curr_clip_pos = clip_pos;
+        vtx.prev_clip_pos = scene.camera.previous_view_projection * world_pos;
+        vtx.uv            = v.uv;
+        vtx.instance_id   = instance_index;
         vtx.meshlet_index = meshlet_idx;
 
         out_mesh.set_vertex(gtid, vtx);
@@ -109,13 +115,23 @@ vs_out visibility_vs(uint vid [[vertex_id]],
     mesh_vertex v = inst.vertex_buffer[vid];
 
     float4 world_pos = entity.transform * float4(v.position, 1.0f);
+    float4 clip_pos  = scene.camera.view_projection * world_pos;
 
     vs_out out;
-    out.position = scene.camera.view_projection * world_pos;
-    out.uv = v.uv;
-    out.instance_id = instance_index;
+    out.position      = clip_pos;
+    out.curr_clip_pos = clip_pos;
+    out.prev_clip_pos = scene.camera.previous_view_projection * world_pos;
+    out.uv            = v.uv;
+    out.instance_id   = instance_index;
     out.meshlet_index = 0xFFFFFFFF;
     return out;
+}
+
+static inline float2 compute_motion_vector(vs_out in) {
+    float2 curr_ndc = in.curr_clip_pos.xy / in.curr_clip_pos.w;
+    float2 prev_ndc = in.prev_clip_pos.xy / in.prev_clip_pos.w;
+    // Convert NDC delta to UV-space delta (flip Y: NDC +Y = UV -Y)
+    return (curr_ndc - prev_ndc) * float2(0.5f, -0.5f);
 }
 
 [[fragment]]
@@ -125,6 +141,7 @@ fs_out visibility_fs_ms(vs_out in [[stage_in]],
     alpha_test(in, scene);
     fs_out out;
     out.tri_instance_id = uint2((in.meshlet_index << 8) | (prim_id & 0xFF), in.instance_id);
+    out.motion_vector   = compute_motion_vector(in);
     return out;
 }
 
@@ -135,5 +152,6 @@ fs_out visibility_fs_vs(vs_out in [[stage_in]],
     alpha_test(in, scene);
     fs_out out;
     out.tri_instance_id = uint2(0x80000000u | prim_id, in.instance_id);
+    out.motion_vector   = compute_motion_vector(in);
     return out;
 }

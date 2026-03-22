@@ -103,6 +103,7 @@ struct camera
     float4x4 inverse_view;
     float4x4 inverse_projection;
     float4x4 inverse_view_projection;
+    float4x4 previous_view_projection;
     float4   position_and_near;   // .xyz = position, .w = near
     float4   direction_and_far;   // .xyz = direction, .w = far
 

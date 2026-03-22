@@ -15,6 +15,7 @@ private struct GPUSceneCamera {
     var inverseView: simd_float4x4
     var inverseProjection: simd_float4x4
     var inverseViewProjection: simd_float4x4
+    var previousViewProjection: simd_float4x4
     var position: simd_float4
     var direction: simd_float4
 }
@@ -100,6 +101,7 @@ class SceneBufferBuilder {
     private var debugVertexCountBuffers: [Buffer] = []
 
     private var currentFrameIndex: Int = 2
+    private var previousViewProjection: simd_float4x4 = matrix_identity_float4x4
 
     // Fallback 1x1 white texture for materials without textures
     private let fallbackTexture: Texture
@@ -307,6 +309,7 @@ class SceneBufferBuilder {
                 inverseView: matrix_identity_float4x4,
                 inverseProjection: matrix_identity_float4x4,
                 inverseViewProjection: matrix_identity_float4x4,
+                previousViewProjection: matrix_identity_float4x4,
                 position: .zero,
                 direction: .zero)
             updatePointers()
@@ -326,8 +329,10 @@ class SceneBufferBuilder {
             inverseView: cam.inverseView,
             inverseProjection: cam.inverseProjection,
             inverseViewProjection: cam.inverseViewProjection,
+            previousViewProjection: previousViewProjection,
             position: SIMD4<Float>(cam.position, cam.near),
             direction: SIMD4<Float>(cam.direction, cam.far))
+        previousViewProjection = cam.viewProjection
     }
 
     /// Updates a single entity's transform. Use for per-frame animation.

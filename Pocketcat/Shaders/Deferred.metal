@@ -47,10 +47,9 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
     // Sample and unpack normal
     float3 normal = normal_texture.read(gtid).rgb;
 
-    float3 orm = orm_texture.read(gtid).rgb;
-    float ao = orm.r;
-    float roughness = max(orm.b, 0.04);
-    float metallic = orm.g;
+    float2 rm = orm_texture.read(gtid).rg;
+    float roughness = max(rm.r, 0.04);
+    float metallic = rm.g;
 
     float3 emissive = emissive_texture.read(gtid).rgb;
 
@@ -95,7 +94,7 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
     float3 diffuse = (kD * albedo / M_PI_F);
     float3 Lo = (diffuse + specular) * light_color * NdotL * shadow;
 
-    float3 ambient_color = ambient * albedo * ao;
+    float3 ambient_color = ambient * albedo;
     float3 color = ambient_color + Lo + emissive;
 
     output_texture.write(float4(color, 1.0), gtid);
