@@ -1,6 +1,7 @@
 # Pocketcat
 
-![](.github/mar18.png)
+![](.github/reg.png)
+![](.github/pt.png)
 
 This repository showcases various modern rendering techniques implemented using Metal 4 API, focused on GPU driven rendering, raytracing and Pocketcat.
 

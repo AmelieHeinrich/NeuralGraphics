@@ -154,8 +154,8 @@ void pathtracer(const device scene_data& scene          [[buffer(0)]],
                 texture2d<float, access::write> output   [[texture(5)]],
                 uint2 pid [[thread_position_in_grid]])
 {
-    const float3 light_dir = normalize(float3(0.3, -1.0, 0.2));
-    const float3 light_color = float3(1.0, 0.95, 0.85) * 3.0;
+    //const float3 light_dir = normalize(float3(0.3, -1.0, 0.2));
+    //const float3 light_color = float3(1.0, 0.95, 0.85) * 10.0;
 
     uint width = output.get_width();
     uint height = output.get_height();
@@ -171,13 +171,7 @@ void pathtracer(const device scene_data& scene          [[buffer(0)]],
 
     float depth = depth_texture.read(pid).r;
     if (depth >= 1.0) {
-        float4 far4    = scene.camera.inverse_view_projection * float4(ndc, 1.0, 1.0);
-        float3 far_w   = far4.xyz / far4.w;
-        float3 cam_pos = scene.camera.position_and_near.xyz;
-        float3 sky_dir = normalize(far_w - cam_pos);
-        float t = saturate(0.5 * (sky_dir.y + 1.0));
-        float3 sky = mix(float3(1.0), float3(0.5, 0.7, 1.0), t);
-        output.write(float4(sky, 1.0), pid);
+        output.write(0.0, pid);
         return;
     }
 
@@ -187,15 +181,15 @@ void pathtracer(const device scene_data& scene          [[buffer(0)]],
     float4 world4    = scene.camera.inverse_view_projection * clip4;
     float3 world_pos = world4.xyz / world4.w;
 
-    SurfaceHit hit0;
-    hit0.pos      = world_pos;
-    hit0.n        = normalize(normal_texture.read(pid).xyz);
-    hit0.albedo   = albedo_texture.read(pid).rgb;
-    float2 rm     = orm_texture.read(pid).rg;
-    hit0.roughness = max(rm.r, 0.04);
-    hit0.metallic  = rm.g;
-    hit0.ao        = 1.0;
-    hit0.emissive  = emissive_texture.read(pid).rgb;
+    SurfaceHit current_hit;
+    current_hit.pos = world_pos;
+    current_hit.n = normalize(normal_texture.read(pid).xyz);
+    current_hit.albedo = albedo_texture.read(pid).rgb;
+    float2 rm = orm_texture.read(pid).rg;
+    current_hit.roughness = max(rm.r, 0.04);
+    current_hit.metallic  = rm.g;
+    current_hit.ao = 1.0;
+    current_hit.emissive  = emissive_texture.read(pid).rgb;
 
     float3 cam_pos = scene.camera.position_and_near.xyz;
     float3 v0      = normalize(cam_pos - world_pos);
@@ -204,52 +198,52 @@ void pathtracer(const device scene_data& scene          [[buffer(0)]],
 
     intersector<triangle_data, instancing> inter;
     inter.assume_geometry_type(geometry_type::triangle);
+    
+    // TODO: Lights
+    
+    float3 radiance   = float3(0.0);
+    for (int sample = 0; sample < 4; sample++) {
+        SurfaceHit hit = current_hit;
+        float3 throughput = float3(1.0);
+        float3 path_radiance = float3(0.0);
+        float3 path_ray_dir = v0;
 
-    // NEE
-    float3 L_direct = float3(0);
-    {
-        float vis = visibility(hit0.pos + hit0.n * 0.001, -light_dir, 10000.0, scene, ift);
-        L_direct = eval_brdf(hit0, v0, -light_dir) * light_color * vis;
-    }
+        for (int bounce = 0; bounce < 3; bounce++) {
+            path_radiance += throughput * hit.emissive;
 
-    // Indirect
-    float3 L_indirect = float3(0);
-    {
-        float3 wi  = sample_cosine_hemisphere(hit0.n, rng.next_f(), rng.next_f());
-        float  pdf = saturate(dot(hit0.n, wi)) / M_PI_F;
+            float3 wi = sample_cosine_hemisphere(hit.n, rng.next_f(), rng.next_f());
+            float  pdf = saturate(dot(hit.n, wi)) / M_PI_F;
+            if (pdf < 1e-5) break;
 
-        if (pdf > 0.0) {
-            ray bounce;
-            bounce.origin       = hit0.pos + hit0.n * 0.001;
-            bounce.direction    = wi;
-            bounce.min_distance = 0.001;
-            bounce.max_distance = 10000;
+            float3 brdf_val = eval_brdf(hit, -path_ray_dir, wi);
+            throughput *= brdf_val / pdf;
 
-            auto bounce_result = inter.intersect(bounce, scene.tlas, 0xFF, ift);
-
-            float3 Li = float3(0);
-            if (bounce_result.type == intersection_type::none) {
-                float t = saturate(0.5 * (wi.y + 1.0));
-                Li = mix(float3(1.0), float3(0.5, 0.7, 1.0), t);
-            } else {
-                float3 hit_pos1 = hit0.pos + wi * bounce_result.distance;
-                SurfaceHit hit1 = fetch_secondary_hit(
-                    scene,
-                    bounce_result.instance_id,
-                    bounce_result.primitive_id,
-                    bounce_result.triangle_barycentric_coord,
-                    hit_pos1, wi);
-
-                float vis1 = visibility(hit1.pos + hit1.n * 0.001, -light_dir, 10000.0, scene, ift);
-                Li = hit1.emissive + eval_brdf(hit1, -wi, -light_dir) * light_color * vis1;
+            if (bounce > 1) {
+                float p = min(max3(throughput.r, throughput.g, throughput.b), 0.95);
+                if (rng.next_f() > p) break;
+                throughput /= p;
             }
 
-            float3 brdf_val = eval_brdf(hit0, v0, wi);
-            L_indirect = brdf_val * Li / pdf;
-        }
-    }
+            ray next;
+            next.origin       = hit.pos + hit.n * 0.001;
+            next.direction    = wi;
+            next.min_distance = 0.001;
+            next.max_distance = 10000.0;
 
-    float3 color = hit0.emissive + L_direct + L_indirect;
+            auto result = inter.intersect(next, scene.tlas, 0xFF, ift);
+            if (result.type == intersection_type::none) break;
+
+            float3 hit_pos = hit.pos + wi * result.distance;
+            hit = fetch_secondary_hit(scene, result.instance_id, result.primitive_id,
+                                      result.triangle_barycentric_coord, hit_pos, wi);
+            path_ray_dir = wi;
+        }
+
+        radiance += path_radiance;
+    }
+    radiance /= 4.0;
+
+    float3 color = current_hit.emissive + radiance;
     float lum = dot(color, float3(0.2126, 0.7152, 0.0722));
     if (lum > 10.0) color *= 10.0 / lum;
 
