@@ -2,6 +2,7 @@
 
 ![](.github/reg.png)
 ![](.github/pt.png)
+![](.github/pt2.png)
 
 This repository showcases various modern rendering techniques implemented using Metal 4 API, focused on GPU driven rendering, raytracing and neural graphics.
 
@@ -22,6 +23,6 @@ Just run the AssetBaker project first, then you can build and run the main proje
 
 ## Work in progress
 
+- RT sun shadows
 - Nanite
 - RTGI
-- RT sun shadows
