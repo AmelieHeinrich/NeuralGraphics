@@ -168,14 +168,15 @@ class FrameManager {
         let debug = DebugPass.shared
         let upscaler = MetalFXUpscalePass(registry: registry)
         let tlas = TLASBuildPass()
-        let pathtracer = Pathtracer()
+        let pathtracer = Pathtracer(settings: registry)
         let deferred = DeferredPass()
         let accumulationDenoiser = AccumulationDenoiserPass()
+        let rtgi = RTGI(settings: registry)
         registry.register(bool: "Debug.DepthTest", label: "Depth Test", default: false)
         debug.registry = registry
 
         self.passes = [
-            tlas, cullViewPass, visibilityPass, pathtracer, tonemap, upscaler, debug, gbufferPass, deferred, accumulationDenoiser,
+            tlas, cullViewPass, visibilityPass, pathtracer, tonemap, upscaler, debug, gbufferPass, deferred, accumulationDenoiser, rtgi
         ]
 
         // Desktop pipeline
@@ -185,6 +186,7 @@ class FrameManager {
         desktopTimeline.addPass(visibilityPass)
         desktopTimeline.addPass(gbufferPass)
         desktopTimeline.addPass(deferred)
+        desktopTimeline.addPass(rtgi)
         desktopTimeline.addPass(tonemap)
         desktopTimeline.addPass(upscaler)
         desktopTimeline.addPass(debug)

@@ -26,11 +26,10 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
 
     const float3 light_dir = normalize(float3(0.3, -1.0, 0.2));
     const float3 light_color = float3(1.0, 0.95, 0.85) * 3.0;
-    const float3 ambient = float3(0.03, 0.04, 0.06);
 
     float depth = depth_texture.read(gtid).r;
     if (depth == 1.0) {
-        output_texture.write(float4(ambient, 1.0), gtid);
+        output_texture.write(0, gtid);
         return;
     }
 
@@ -94,8 +93,6 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
     float3 diffuse = (kD * albedo / M_PI_F);
     float3 Lo = (diffuse + specular) * light_color * NdotL * shadow;
 
-    float3 ambient_color = ambient * albedo;
-    float3 color = ambient_color + Lo + emissive;
-
+    float3 color = Lo + emissive;
     output_texture.write(float4(color, 1.0), gtid);
 }

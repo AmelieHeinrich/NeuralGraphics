@@ -77,4 +77,18 @@ inline float4 interpolate2D(float2 b, float4 a0, float4 a1, float4 a2) {
     return float4(normalize(t.xyz), t.w);
 }
 
+inline float3 sample_cosine_hemisphere(float3 normal, float r1, float r2) {
+    float sin_theta = sqrt(r1);
+    float cos_theta = sqrt(1.0 - r1);
+    float phi = 2.0 * M_PI_F * r2;
+
+    float3 local = float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
+
+    float3 up = abs(normal.y) < 0.999 ? float3(0, 1, 0) : float3(1, 0, 0);
+    float3 t = normalize(cross(up, normal));
+    float3 b = cross(normal, t);
+
+    return normalize(t * local.x + b * local.y + normal * local.z);
+}
+
 #endif
