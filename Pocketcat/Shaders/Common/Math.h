@@ -91,4 +91,8 @@ inline float3 sample_cosine_hemisphere(float3 normal, float r1, float r2) {
     return normalize(t * local.x + b * local.y + normal * local.z);
 }
 
+inline float radians(float deg) {
+    return deg * (M_PI_F / 180.0f);
+}
+
 #endif

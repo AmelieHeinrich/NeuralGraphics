@@ -17,7 +17,8 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
                      texture2d<float> normal_texture [[texture(2)]],
                      texture2d<float> orm_texture [[texture(3)]],
                      texture2d<float> emissive_texture [[texture(4)]],
-                     texture2d<float, access::write> output_texture [[texture(5)]],
+                     texture2d<float> mask_texture [[texture(5)]],
+                     texture2d<float, access::write> output_texture [[texture(6)]],
                      uint2 gtid [[thread_position_in_grid]])
 {
     if (gtid.x >= output_texture.get_width() || gtid.y >= output_texture.get_height()) {
@@ -75,23 +76,9 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
     float3 kS = F;
     float3 kD = float3(1.0) - kS;
     kD *= 1.0 - metallic;
-    
-    ray shadow_ray;
-    shadow_ray.origin  = world_pos + normal * 0.01;
-    shadow_ray.direction = -light_dir;
-    shadow_ray.min_distance = 0.001;
-    shadow_ray.max_distance = 10000;
-
-    intersector<triangle_data, instancing> shadow_inter;
-    shadow_inter.assume_geometry_type(geometry_type::triangle);
-    shadow_inter.accept_any_intersection(true);
-
-    typename intersector<triangle_data, instancing>::result_type shadow_result;
-    shadow_result = shadow_inter.intersect(shadow_ray, scene.tlas, 0xFF, ift);
-    float shadow = (shadow_result.type == intersection_type::none) ? 1.0 : 0.0;
 
     float3 diffuse = (kD * albedo / M_PI_F);
-    float3 Lo = (diffuse + specular) * light_color * NdotL * shadow;
+    float3 Lo = (diffuse + specular) * light_color * NdotL * mask_texture.read(gtid).r;
 
     float3 color = Lo + emissive;
     output_texture.write(float4(color, 1.0), gtid);

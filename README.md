@@ -24,5 +24,6 @@ Just run the AssetBaker project first, then you can build and run the main proje
 ## Work in progress
 
 - RT sun shadows
+- SVGF
 - Nanite
 - RTGI
