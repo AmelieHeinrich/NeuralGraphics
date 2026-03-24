@@ -32,3 +32,7 @@ Just run the AssetBaker project first, then you can build and run the main proje
 
 - Inference engine
 - NNAO
+
+## Links
+
+[![Hypercommit](https://img.shields.io/badge/Hypercommit-DB2475)](https://hypercommit.com/pocketcat)
