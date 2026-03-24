@@ -27,10 +27,10 @@ class RTShadows: Pass {
         pipeline = ComputePipeline(function: "rt_shadows", linkedFunctions: ["alpha_any_hit"])
         ift = pipeline.createIFT()
 
-        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r16Float, width: 1, height: 1, mipmapped: false)
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .r8Unorm, width: 1, height: 1, mipmapped: false)
         desc.usage = [.shaderRead, .shaderWrite]
         let tex = Texture(descriptor: desc)
-        tex.setLabel(name: "Visibilit yMask")
+        tex.setLabel(name: "Visibility Mask")
         self.visibilityMask = tex
 
         super.init()

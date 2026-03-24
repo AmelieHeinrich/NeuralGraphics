@@ -103,9 +103,7 @@ class RTGI: Pass {
         cp.consumerBarrier(before: .dispatch, after: [.dispatch, .accelerationStructure])
         cp.setPipeline(pipeline: pipeline)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
-        cp.setBytes(
-            allocator: context.allocator, index: 1, bytes: &parameters,
-            size: MemoryLayout<RTGIParameters>.size)
+        cp.setBytes(allocator: context.allocator, index: 1, bytes: &parameters, size: MemoryLayout<RTGIParameters>.size)
         cp.setTexture(texture: self.diffuseTexture, index: 0)
         cp.setTexture(texture: depth, index: 1)
         cp.setTexture(texture: normal, index: 2)
@@ -114,6 +112,8 @@ class RTGI: Pass {
             threads: MTLSizeMake((w + 7) / 8, (h + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1)
         )
         cp.end()
+        
+        context.resources.register(self.diffuseTexture, for: "RTGI.Texture")
 
         accumulationFrame &+= 1
     }

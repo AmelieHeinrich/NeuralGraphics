@@ -8,6 +8,19 @@
 import Metal
 import simd
 
+private struct DeferredParameters {
+    var depth: UInt64 = 0
+    var albedo: UInt64 = 0
+    var normal: UInt64 = 0
+    var orm: UInt64 = 0
+    var emissive: UInt64 = 0
+    var mask: UInt64 = 0
+    var ao: UInt64 = 0
+    var output: UInt64 = 0
+    var aoResolutionScale: Float = 1.0
+    var aoEnabled: UInt32 = 0
+}
+
 class DeferredPass: Pass {
     private let pipeline: ComputePipeline
     private var colorTexture: Texture
@@ -35,7 +48,8 @@ class DeferredPass: Pass {
         let orm = context.resources.get("GBuffer.ORM") as Texture?
         let emissive = context.resources.get("GBuffer.Emissive") as Texture?
         let mask = context.resources.get("VisibilityMask") as Texture?
-        
+        let ao = context.resources.get("RTAO.Mask") as Texture?
+
         guard let depth = depth else { return }
         guard let albedo = albedo else { return }
         guard let normal = normal else { return }
@@ -44,21 +58,29 @@ class DeferredPass: Pass {
         guard let mask = mask else { return }
         guard (context.scene != nil) else { return }
 
+        var params = DeferredParameters()
+        params.depth = depth.texture.gpuResourceID._impl
+        params.albedo = albedo.texture.gpuResourceID._impl
+        params.normal = normal.texture.gpuResourceID._impl
+        params.orm = orm.texture.gpuResourceID._impl
+        params.emissive = emissive.texture.gpuResourceID._impl
+        params.mask = mask.texture.gpuResourceID._impl
+        params.output = colorTexture.texture.gpuResourceID._impl
+
+        if let ao = ao {
+            params.ao = ao.texture.gpuResourceID._impl
+            params.aoResolutionScale = Float(ao.texture.width) / Float(depth.texture.width)
+            params.aoEnabled = 1
+        }
+
         let cp = context.cmdBuffer.beginComputePass(name: "Deferred")
         cp.consumerBarrier(before: .dispatch, after: [.dispatch, .accelerationStructure])
         cp.setPipeline(pipeline: pipeline)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
-        cp.setTexture(texture: depth, index: 0)
-        cp.setTexture(texture: albedo, index: 1)
-        cp.setTexture(texture: normal, index: 2)
-        cp.setTexture(texture: orm, index: 3)
-        cp.setTexture(texture: emissive, index: 4)
-        cp.setTexture(texture: mask, index: 5)
-        cp.setTexture(texture: self.colorTexture, index: 6)
+        cp.setBytes(allocator: context.allocator, index: 2, bytes: &params, size: MemoryLayout<DeferredParameters>.size)
         cp.dispatch(threads: MTLSizeMake((colorTexture.texture.width + 7) / 8, (colorTexture.texture.height + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1))
         cp.end()
 
         context.resources.register(colorTexture, for: "HDR")
     }
 }
-

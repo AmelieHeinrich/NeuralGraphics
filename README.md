@@ -13,7 +13,7 @@ Just run the AssetBaker project first, then you can build and run the main proje
 
 ## Current features
 
-- Raytraced hard shadows
+- Raytraced sun shadows
 - Mesh shaders
 - GPU driven debug renderer
 - GPU driven TLAS build
@@ -23,7 +23,12 @@ Just run the AssetBaker project first, then you can build and run the main proje
 
 ## Work in progress
 
-- RT sun shadows
 - SVGF
-- Nanite
 - RTGI
+- RTAO
+- Nanite
+
+## TODO
+
+- Inference engine
+- NNAO

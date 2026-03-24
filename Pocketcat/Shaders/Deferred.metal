@@ -9,32 +9,39 @@
 #include "Common/Math.h"
 #include "Common/PBR.h"
 
+struct deferred_parameters {
+    texture2d<float>                depth;
+    texture2d<float>                albedo;
+    texture2d<float>                normal;
+    texture2d<float>                orm;
+    texture2d<float>                emissive;
+    texture2d<float>                mask;
+    texture2d<float>                ao;
+    texture2d<float, access::write> output;
+    float                           ao_resolution_scale;
+    uint                            ao_enabled;
+};
+
 [[kernel]]
 void deferred_kernel(const device scene_data& scene [[buffer(0)]],
                      intersection_function_table<triangle_data, instancing> ift [[buffer(1)]],
-                     texture2d<float> depth_texture [[texture(0)]],
-                     texture2d<float> albedo_texture [[texture(1)]],
-                     texture2d<float> normal_texture [[texture(2)]],
-                     texture2d<float> orm_texture [[texture(3)]],
-                     texture2d<float> emissive_texture [[texture(4)]],
-                     texture2d<float> mask_texture [[texture(5)]],
-                     texture2d<float, access::write> output_texture [[texture(6)]],
+                     const device deferred_parameters& params [[buffer(2)]],
                      uint2 gtid [[thread_position_in_grid]])
 {
-    if (gtid.x >= output_texture.get_width() || gtid.y >= output_texture.get_height()) {
+    if (gtid.x >= params.output.get_width() || gtid.y >= params.output.get_height()) {
         return;
     }
 
     const float3 light_dir = scene.sun.direction_and_radius.xyz;
     const float3 light_color = scene.sun.color_and_intensity.xyz * scene.sun.color_and_intensity.w;
 
-    float depth = depth_texture.read(gtid).r;
+    float depth = params.depth.read(gtid).r;
     if (depth == 1.0) {
-        output_texture.write(0, gtid);
+        params.output.write(0, gtid);
         return;
     }
 
-    float2 uv = (float2(gtid) + 0.5) / float2(output_texture.get_width(), output_texture.get_height());
+    float2 uv = (float2(gtid) + 0.5) / float2(params.output.get_width(), params.output.get_height());
     float2 ndc = uv * 2.0 - 1.0;
     ndc.y = -ndc.y;
 
@@ -42,16 +49,14 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
     float4 world_pos_h = scene.camera.inverse_view_projection * clip_pos;
     float3 world_pos = world_pos_h.xyz / world_pos_h.w;
 
-    float3 albedo = albedo_texture.read(gtid).rgb;
+    float3 albedo = params.albedo.read(gtid).rgb;
+    float3 normal = params.normal.read(gtid).rgb;
 
-    // Sample and unpack normal
-    float3 normal = normal_texture.read(gtid).rgb;
-
-    float2 rm = orm_texture.read(gtid).rg;
+    float2 rm = params.orm.read(gtid).rg;
     float roughness = max(rm.r, 0.04);
     float metallic = rm.g;
 
-    float3 emissive = emissive_texture.read(gtid).rgb;
+    float3 emissive = params.emissive.read(gtid).rgb;
 
     float3 V = normalize(scene.camera.position_and_near.xyz - world_pos);
     float3 L = normalize(-light_dir);
@@ -78,8 +83,17 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
     kD *= 1.0 - metallic;
 
     float3 diffuse = (kD * albedo / M_PI_F);
-    float3 Lo = (diffuse + specular) * light_color * NdotL * mask_texture.read(gtid).r;
+    float shadow = params.mask.read(gtid).r;
 
-    float3 color = Lo + emissive;
-    output_texture.write(float4(color, 1.0), gtid);
+    float ao_value = 1.0;
+    if (params.ao_enabled) {
+        uint2 ao_pixel = uint2(float2(gtid) * params.ao_resolution_scale);
+        ao_value = params.ao.read(ao_pixel).r;
+    }
+
+    float3 Lo = (diffuse * ao_value + specular) * light_color * NdotL * shadow;
+
+    float3 ambient = kD * albedo * 0.02 * ao_value;
+    float3 color = Lo + emissive + ambient;
+    params.output.write(float4(color, 1.0), gtid);
 }
