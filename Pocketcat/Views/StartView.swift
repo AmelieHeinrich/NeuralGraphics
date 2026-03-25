@@ -16,10 +16,9 @@ private let configColors: [String: Color] = [
     "bistro": .green,
     "intel_sponza": .purple,
     "cube_storm": .yellow,
-    "san_miguel": .mint,
-    "living_room": .pink,
     "buddha": .teal,
-    "buddha_storm_sponza": .red,
+    "cube_sphere": .indigo,
+    "buddha_storm": .red,
 ]
 
 private func color(for config: SceneConfiguration) -> Color {
@@ -34,8 +33,10 @@ private struct SceneCard: View {
 
     @State private var isHovered = false
 
+    private var available: Bool { config.isAvailable }
+
     var body: some View {
-        let accent = color(for: config)
+        let accent = available ? color(for: config) : Color.gray
 
         Button {
             onPick(config)
@@ -51,7 +52,7 @@ private struct SceneCard: View {
 
                     Image(systemName: config.systemIcon)
                         .font(.system(size: 28, weight: .light))
-                        .foregroundStyle(accent)
+                        .foregroundStyle(available ? accent : Color.gray.opacity(0.4))
                         .scaleEffect(isHovered ? 1.12 : 1.0)
                         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
                 }
@@ -71,7 +72,21 @@ private struct SceneCard: View {
 
                 Spacer(minLength: 8)
 
-                if config.tags.isEmpty {
+                if !available {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 7, weight: .semibold))
+                            .foregroundStyle(.orange.opacity(0.9))
+                        Text("Missing resource")
+                            .font(.system(size: 8, weight: .semibold))
+                            .textCase(.uppercase)
+                            .tracking(0.3)
+                            .foregroundStyle(.orange.opacity(0.9))
+                    }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.orange.opacity(0.12)))
+                } else if config.tags.isEmpty {
                     Spacer().frame(height: 20)
                 } else {
                     HStack(spacing: 4) {
@@ -97,20 +112,22 @@ private struct SceneCard: View {
             .frame(width: 160, height: 190)
             .background(
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.white.opacity(isHovered ? 0.08 : 0.04))
+                    .fill(.white.opacity(isHovered && available ? 0.08 : 0.04))
                     .overlay(
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .strokeBorder(
-                                isHovered ? accent.opacity(0.55) : .white.opacity(0.10),
+                                isHovered && available ? accent.opacity(0.55) : .white.opacity(0.10),
                                 lineWidth: 1
                             )
                     )
             )
-            .shadow(color: isHovered ? accent.opacity(0.25) : .clear, radius: 14, y: 4)
+            .shadow(color: isHovered && available ? accent.opacity(0.25) : .clear, radius: 14, y: 4)
             .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .opacity(available ? 1.0 : 0.45)
         }
         .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
+        .disabled(!available)
+        .onHover { isHovered = available && $0 }
     }
 }
 
@@ -119,7 +136,12 @@ private struct SceneCard: View {
 struct StartView: View {
     let onScenePicked: (SceneConfiguration) -> Void
 
-    private let configs = SceneConfiguration.all
+    @State private var selectedGroup: SceneGroup = .showcase
+
+    private var visibleConfigs: [SceneConfiguration] {
+        SceneConfiguration.all.filter { $0.group == selectedGroup }
+    }
+
     private let columns = [
         GridItem(.flexible(), spacing: 20),
         GridItem(.flexible(), spacing: 20),
@@ -145,11 +167,20 @@ struct StartView: View {
                         Text("Choose a scene to load")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(.white.opacity(0.40))
+
+                        Picker("", selection: $selectedGroup) {
+                            ForEach(SceneGroup.allCases, id: \.self) { group in
+                                Text(group.rawValue).tag(group)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 280)
+                        .padding(.top, 6)
                     }
 
                     // Grid
                     LazyVGrid(columns: columns, spacing: 20) {
-                        ForEach(configs) { config in
+                        ForEach(visibleConfigs) { config in
                             SceneCard(config: config, onPick: onScenePicked)
                         }
                     }

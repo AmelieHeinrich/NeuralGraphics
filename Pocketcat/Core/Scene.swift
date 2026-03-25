@@ -6,6 +6,7 @@
 //
 
 import simd
+import Foundation
 
 // MARK: - Entity
 
@@ -41,6 +42,13 @@ struct SceneDescriptor {
     var models: [SceneModelDescriptor]
 }
 
+// MARK: - Scene Group
+
+enum SceneGroup: String, CaseIterable {
+    case showcase       = "Showcase"
+    case apiPerformance = "API / Performance"
+}
+
 // MARK: - Scene Configuration (preset)
 
 struct SceneConfiguration: Identifiable {
@@ -48,7 +56,13 @@ struct SceneConfiguration: Identifiable {
     let name: String
     let systemIcon: String
     let tags: [String]
+    let group: SceneGroup
     let descriptor: SceneDescriptor
+
+    var isAvailable: Bool {
+        guard let first = descriptor.models.first else { return true }
+        return Bundle.main.url(forResource: first.resource, withExtension: "bin") != nil
+    }
 }
 
 // MARK: - Built-in presets
@@ -60,6 +74,7 @@ extension SceneConfiguration {
             name: "Cube",
             systemIcon: "cube",
             tags: ["Basic"],
+            group: .showcase,
             descriptor: SceneDescriptor(models: [
                 SceneModelDescriptor(resource: "Cube")
             ])
@@ -69,6 +84,7 @@ extension SceneConfiguration {
             name: "Sponza",
             systemIcon: "building.columns",
             tags: ["Classic"],
+            group: .showcase,
             descriptor: SceneDescriptor(models: [
                 SceneModelDescriptor(resource: "Sponza")
             ])
@@ -78,6 +94,7 @@ extension SceneConfiguration {
             name: "Bistro",
             systemIcon: "house",
             tags: ["Exterior", "Complex"],
+            group: .showcase,
             descriptor: SceneDescriptor(models: [
                 SceneModelDescriptor(resource: "bistro_ext")
             ])
@@ -87,6 +104,7 @@ extension SceneConfiguration {
             name: "Intel Sponza",
             systemIcon: "building.columns.fill",
             tags: ["PBR"],
+            group: .showcase,
             descriptor: SceneDescriptor(models: [
                 SceneModelDescriptor(resource: "IntelSponza")
             ])
@@ -96,6 +114,7 @@ extension SceneConfiguration {
             name: "Cube Storm",
             systemIcon: "square.grid.3x3.fill",
             tags: ["Stress test"],
+            group: .apiPerformance,
             descriptor: SceneDescriptor(
                 models: (0..<8092).map { _ in
                     SceneModelDescriptor(
@@ -110,28 +129,11 @@ extension SceneConfiguration {
                 })
         ),
         SceneConfiguration(
-            id: "san_miguel",
-            name: "San Miguel",
-            systemIcon: "tree",
-            tags: ["Complex", "Foliage"],
-            descriptor: SceneDescriptor(models: [
-                SceneModelDescriptor(resource: "SanMiguel")
-            ])
-        ),
-        SceneConfiguration(
-            id: "living_room",
-            name: "Living Room",
-            systemIcon: "sofa",
-            tags: ["Pathtracing"],
-            descriptor: SceneDescriptor(models: [
-                SceneModelDescriptor(resource: "LivingRoom")
-            ])
-        ),
-        SceneConfiguration(
             id: "buddha",
             name: "Buddha",
             systemIcon: "figure.mind.and.body",
             tags: ["Basic"],
+            group: .showcase,
             descriptor: SceneDescriptor(models: [
                 SceneModelDescriptor(resource: "Buddha")
             ])
@@ -141,6 +143,7 @@ extension SceneConfiguration {
             name: "Cube And Sphere",
             systemIcon: "cube.circle",
             tags: ["RT Test"],
+            group: .apiPerformance,
             descriptor: SceneDescriptor(models: [
                 SceneModelDescriptor(resource: "CubeAndSphere")
             ])
@@ -150,6 +153,7 @@ extension SceneConfiguration {
             name: "Buddha Storm",
             systemIcon: "sparkles",
             tags: ["Stress test", "Mesh shaders"],
+            group: .apiPerformance,
             descriptor: SceneDescriptor(
                 models: (0..<64).map { _ in
                     SceneModelDescriptor(

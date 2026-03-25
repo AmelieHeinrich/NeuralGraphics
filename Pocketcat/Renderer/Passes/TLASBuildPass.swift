@@ -9,9 +9,13 @@ import Metal
 
 class TLASBuildPass: Pass {
     var cullPipe: ComputePipeline
+    unowned var registry: SettingsRegistry
 
-    override init() {
+    init(settings: SettingsRegistry) {
         cullPipe = ComputePipeline(function: "cull_tlas")
+        registry = settings
+        
+        settings.register(bool: "TLAS.BuildIndirect", label: "Indirect TLAS Build", default: false)
     }
 
     override func render(context: FrameContext) {
@@ -21,7 +25,11 @@ class TLASBuildPass: Pass {
                 return
             }
 
-            cpuBuild(context: context, scene: scene)
+            if registry.bool("TLAS.BuildIndirect") {
+                gpuBuild(context: context, scene: scene)
+            } else {
+                cpuBuild(context: context, scene: scene)
+            }
         }
     }
 

@@ -174,7 +174,7 @@ class FrameManager {
         let tonemap = TonemapPass(registry: registry)
         let debug = DebugPass.shared
         let upscaler = MetalFXUpscalePass(registry: registry)
-        let tlas = TLASBuildPass()
+        let tlas = TLASBuildPass(settings: registry)
         let pathtracer = Pathtracer(settings: registry)
         let deferred = DeferredPass()
         let accumulationDenoiser = AccumulationDenoiserPass()
