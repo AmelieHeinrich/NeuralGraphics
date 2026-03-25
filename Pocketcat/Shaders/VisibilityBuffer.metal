@@ -129,8 +129,6 @@ vs_out visibility_vs(uint vid [[vertex_id]],
 static inline float2 compute_motion_vector(vs_out in) {
     float2 curr_ndc = in.curr_clip_pos.xy / in.curr_clip_pos.w;
     float2 prev_ndc = in.prev_clip_pos.xy / in.prev_clip_pos.w;
-    // Backward vector: where did this pixel come from in the previous frame?
-    // Convert NDC delta to UV-space (flip Y: NDC +Y = UV -Y)
     return (prev_ndc - curr_ndc) * float2(0.5f, -0.5f);
 }
 

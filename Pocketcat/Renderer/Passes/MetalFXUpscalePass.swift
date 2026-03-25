@@ -75,8 +75,8 @@ class MetalFXUpscalePass: Pass {
             temporalUpscaler.depthTexture = depth.texture
             temporalUpscaler.motionTexture = mv.texture
             temporalUpscaler.reset = firstFrameTemporal
-            temporalUpscaler.motionVectorScaleX = Float(ldr.texture.width)
-            temporalUpscaler.motionVectorScaleY = Float(ldr.texture.height)
+            temporalUpscaler.motionVectorScaleX = 1.0
+            temporalUpscaler.motionVectorScaleY = 1.0
             
             context.cmdBuffer.pushMarker(name: "MetalFX Temporal")
             temporalUpscaler.encode(commandBuffer: context.cmdBuffer.commandBuffer)
