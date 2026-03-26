@@ -33,15 +33,18 @@ void rtgi(texture2d<float, access::read_write> out [[texture(0)]],
     if (pixel_id.x >= width || pixel_id.y >= height)
         return;
 
-    float2 dimensions = float2(width, height);
-    float2 pixel_center = float2(pixel_id) + 0.5;
-    float2 uv = pixel_center / dimensions;
-    float2 ndc = uv * 2.0 - 1.0;
-    ndc.y = -ndc.y;
-
     uint2 read_pixel_id = uint2(float2(pixel_id) / parameters.resolution_scale);
 
     float depth = depth_texture.read(read_pixel_id).x;
+    if (depth >= 1.0) {
+        out.write(float4(0.0, 0.0, 0.0, 1.0), pixel_id);
+        return;
+    }
+
+    float2 full_res = float2(depth_texture.get_width(), depth_texture.get_height());
+    float2 ndc = ((float2(read_pixel_id) + 0.5) / full_res) * 2.0 - 1.0;
+    ndc.y = -ndc.y;
+
     float3 n = normal_texture.read(read_pixel_id).rgb;
     float4 clip4 = float4(ndc, depth, 1.0);
     float4 world4 = scene.camera.inverse_view_projection * clip4;

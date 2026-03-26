@@ -20,6 +20,9 @@ struct deferred_parameters {
     texture2d<float, access::write> output;
     float                           ao_resolution_scale;
     uint                            ao_enabled;
+    texture2d<float>                gi;
+    float                           gi_resolution_scale;
+    uint                            gi_enabled;
 };
 
 [[kernel]]
@@ -90,10 +93,16 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
         uint2 ao_pixel = uint2(float2(gtid) * params.ao_resolution_scale);
         ao_value = params.ao.read(ao_pixel).r;
     }
+    
+    float3 gi_value = 0.0f;
+    if (params.gi_enabled) {
+        uint2 gi_pixel = uint2(float2(gtid) * params.gi_resolution_scale);
+        gi_value = params.gi.read(gi_pixel).rgb;
+    }
 
     float3 Lo = (diffuse * ao_value + specular) * light_color * NdotL * shadow;
 
-    float3 ambient = kD * albedo * 0.02 * ao_value;
+    float3 ambient = kD * albedo * ao_value * gi_value;
     float3 color = Lo + emissive + ambient;
     params.output.write(float4(color, 1.0), gtid);
 }

@@ -29,17 +29,13 @@ class RTGI: Pass {
 
     init(settings: SettingsRegistry) {
         self.settings = settings
-        self.settings.register(
-            int: "RTGI.SamplesPerPixel", label: "Samples per pixel", default: 1, range: 1...32)
-        self.settings.register(bool: "RTGI.Enabled", label: "Enabled", default: false)
-        self.settings.register(
-            enum: "RTGI.TracingResolution", label: "Tracing Resolution",
-            default: TracingResolution.Half)
+        self.settings.register(int: "RTGI.SamplesPerPixel", label: "Samples per pixel", default: 1, range: 1...32)
+        self.settings.register(bool: "RTGI.Enabled", label: "Enabled", default: true)
+        self.settings.register(enum: "RTGI.TracingResolution", label: "Tracing Resolution", default: TracingResolution.Quarter)
 
         pipeline = ComputePipeline(function: "rtgi")
 
-        let desc = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .rgba16Float, width: 1, height: 1, mipmapped: false)
+        let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: 1, height: 1, mipmapped: false)
         desc.usage = [.shaderRead, .shaderWrite]
         let tex = Texture(descriptor: desc)
         tex.setLabel(name: "Diffuse Indirect")
@@ -50,7 +46,7 @@ class RTGI: Pass {
 
     override func resize(renderWidth: Int, renderHeight: Int, outputWidth: Int, outputHeight: Int) {
         let resSetting = settings.enum(
-            "RTGI.TracingResolution", as: TracingResolution.self, default: .Half)
+            "RTGI.TracingResolution", as: TracingResolution.self, default: .Quarter)
         let scale: Float
         switch resSetting {
         case .Quarter: scale = 0.25
@@ -75,8 +71,7 @@ class RTGI: Pass {
 
         guard let depth = depth, let albedo = albedo, let normal = normal else { return }
 
-        let resSetting = settings.enum(
-            "RTGI.TracingResolution", as: TracingResolution.self, default: .Half)
+        let resSetting = settings.enum("RTGI.TracingResolution", as: TracingResolution.self, default: .Quarter)
         let scale: Float
         switch resSetting {
         case .Quarter: scale = 0.25

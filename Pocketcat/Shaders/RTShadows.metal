@@ -30,6 +30,12 @@ void rt_shadows(texture2d<float, access::write> out [[texture(0)]],
     uint height = out.get_height();
     if (pixel_id.x >= width || pixel_id.y >= height)
         return;
+    
+    const float3 light_dir = -scene.sun.direction_and_radius.xyz;
+    const float light_radius = radians(scene.sun.direction_and_radius.w);
+    const float3 safe_up = abs(light_dir.y) > 0.999f ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 1.0f, 0.0f);
+    const float3 light_tangent = normalize(cross(safe_up, light_dir));
+    const float3 light_bitangent = normalize(cross(light_dir, light_tangent));
 
     float2 dimensions = float2(width, height);
     float2 pixel_center = float2(pixel_id) + 0.5;
@@ -39,6 +45,11 @@ void rt_shadows(texture2d<float, access::write> out [[texture(0)]],
 
     float depth = depth_texture.read(pixel_id).x;
     float3 n = normal_texture.read(pixel_id).rgb;
+    if (dot(n, light_dir) <= 0.0) {
+        out.write(0, pixel_id);
+        return;
+    }
+    
     float4 clip4 = float4(ndc, depth, 1.0);
     float4 world4 = scene.camera.inverse_view_projection * clip4;
     float3 world_pos = world4.xyz / world4.w;
@@ -48,12 +59,6 @@ void rt_shadows(texture2d<float, access::write> out [[texture(0)]],
     intersector<triangle_data, instancing> inter;
     inter.assume_geometry_type(geometry_type::triangle);
     inter.accept_any_intersection(true);
-
-    const float3 light_dir = -scene.sun.direction_and_radius.xyz;
-    const float light_radius = radians(scene.sun.direction_and_radius.w);
-    const float3 safe_up = abs(light_dir.y) > 0.999f ? float3(1.0f, 0.0f, 0.0f) : float3(0.0f, 1.0f, 0.0f);
-    const float3 light_tangent = normalize(cross(safe_up, light_dir));
-    const float3 light_bitangent = normalize(cross(light_dir, light_tangent));
     
     float visibility = 0.0;
     for (uint i = 0; i < parameters.spp; i++) {
@@ -68,7 +73,7 @@ void rt_shadows(texture2d<float, access::write> out [[texture(0)]],
         ray.origin = world_pos + n * 0.005f;
         ray.direction = wi;
         ray.min_distance = 0.001f;
-        ray.max_distance = 1000.0f;
+        ray.max_distance = 300.0f;
         
         auto result = inter.intersect(ray, scene.tlas, 0xFF, ift);
         visibility += (result.type == intersection_type::none);

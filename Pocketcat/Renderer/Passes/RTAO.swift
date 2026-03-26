@@ -25,7 +25,7 @@ class RTAO: Pass {
         self.settings = settings
         self.settings.register(int: "RTAO.SamplesPerPixel", label: "Samples per pixel", default: 1, range: 1...32)
         self.settings.register(bool: "RTAO.Enabled", label: "Enabled", default: true)
-        self.settings.register(enum: "RTAO.TracingResolution", label: "Tracing Resolution", default: TracingResolution.Native)
+        self.settings.register(enum: "RTAO.TracingResolution", label: "Tracing Resolution", default: TracingResolution.Quarter)
         self.settings.register(float: "RTAO.Radius", label: "AO Radius", default: 0.50, range: 0.1...10.0)
 
         pipeline = ComputePipeline(function: "rtao")
@@ -40,7 +40,7 @@ class RTAO: Pass {
     }
 
     override func resize(renderWidth: Int, renderHeight: Int, outputWidth: Int, outputHeight: Int) {
-        let resSetting = settings.enum("RTAO.TracingResolution", as: TracingResolution.self, default: .Native)
+        let resSetting = settings.enum("RTAO.TracingResolution", as: TracingResolution.self, default: .Quarter)
         let scale: Float
         
         switch resSetting {
@@ -64,7 +64,7 @@ class RTAO: Pass {
 
         guard let depth = depth, let normal = normal else { return }
 
-        let resSetting = settings.enum("RTAO.TracingResolution", as: TracingResolution.self, default: .Native)
+        let resSetting = settings.enum("RTAO.TracingResolution", as: TracingResolution.self, default: .Quarter)
         let scale: Float
         
         switch resSetting {
