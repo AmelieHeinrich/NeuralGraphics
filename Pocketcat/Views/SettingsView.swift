@@ -27,17 +27,21 @@ private struct SettingsSectionView: View {
     let section: String
     let keys: [String]
     @ObservedObject var registry: SettingsRegistry
+    @State private var isExpanded: Bool = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(keys, id: \.self) { key in
+                    SettingRowView(key: key, registry: registry)
+                }
+            }
+            .padding(.top, 8)
+        } label: {
             Text(section)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .textCase(.uppercase)
-
-            ForEach(keys, id: \.self) { key in
-                SettingRowView(key: key, registry: registry)
-            }
         }
     }
 }

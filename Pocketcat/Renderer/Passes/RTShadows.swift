@@ -23,16 +23,19 @@ struct RTShadowTemporalDenoiseInput {
     var moments: MTLResourceID
     var previous_moments: MTLResourceID
     var history: MTLResourceID
+    var depth_threshold: Float
+    var normal_threshold: Float
 }
 
 struct RTShadowAtrousInput {
-    var input_shadow:   MTLResourceID
-    var motion_vectors: MTLResourceID
-    var normals:        MTLResourceID
-    var moments:        MTLResourceID
-    var output_shadow:  MTLResourceID
-    var step_size:      Int32
-    var _pad:           Int32 = 0
+    var input_shadow:      MTLResourceID
+    var motion_vectors:    MTLResourceID
+    var normals:           MTLResourceID
+    var moments:           MTLResourceID
+    var output_shadow:     MTLResourceID
+    var step_size:         Int32
+    var phi_normal_power:  Float
+    var phi_depth_factor:  Float
 }
 
 class RTShadows: Pass {
@@ -63,6 +66,11 @@ class RTShadows: Pass {
     init(settings: SettingsRegistry) {
         self.settings = settings
         self.settings.register(int: "RTShadows.SamplesPerPixel", label: "Samples per pixel", default: 1, range: 1...32)
+        self.settings.register(bool: "RTShadows.DenoisingEnabled", label: "Enable Denoising", default: true)
+        self.settings.register(float: "RTShadows.Denoiser.DepthThreshold", label: "Temporal Depth Threshold", default: 0.15, range: 0.01...1.0, step: 0.01)
+        self.settings.register(float: "RTShadows.Denoiser.NormalThreshold", label: "Temporal Normal Threshold", default: 0.36, range: 0.0...1.0, step: 0.01)
+        self.settings.register(float: "RTShadows.Denoiser.NormalPower", label: "Spatial Normal Power", default: 32.0, range: 1.0...128.0, step: 1.0)
+        self.settings.register(float: "RTShadows.Denoiser.DepthPhi", label: "Spatial Depth Phi", default: 0.01, range: 0.001...0.5, step: 0.001)
 
         tracePipeline = ComputePipeline(function: "rt_shadows", linkedFunctions: ["alpha_any_hit"])
         temporalPipeline = ComputePipeline(function: "denoise_shadows_temporal")
@@ -77,14 +85,12 @@ class RTShadows: Pass {
             return t
         }
 
-        shadowMask    = makeTex(.r8Unorm,      "RTShadows.NoisyMask")
-        filtered      = [makeTex(.r8Unorm,      "RTShadows.Filtered.Ping"),
-                         makeTex(.r8Unorm,      "RTShadows.Filtered.Pong")]
-        moments       = [makeTex(.rgba16Float,  "RTShadows.Moments.Ping"),
-                         makeTex(.rgba16Float,  "RTShadows.Moments.Pong")]
-        prevFiltered  = makeTex(.r8Unorm,      "RTShadows.Prev.Filtered")
-        prevMoments   = makeTex(.rgba16Float,  "RTShadows.Prev.Moments")
-        historyLength = makeTex(.r16Float,     "RTShadows.HistoryLength")
+        shadowMask = makeTex(.r8Unorm, "RTShadows.NoisyMask")
+        filtered = [makeTex(.r8Unorm, "RTShadows.Filtered.Ping"), makeTex(.r8Unorm, "RTShadows.Filtered.Pong")]
+        moments = [makeTex(.rgba16Float, "RTShadows.Moments.Ping"), makeTex(.rgba16Float, "RTShadows.Moments.Pong")]
+        prevFiltered  = makeTex(.r8Unorm, "RTShadows.Prev.Filtered")
+        prevMoments   = makeTex(.rgba16Float, "RTShadows.Prev.Moments")
+        historyLength = makeTex(.r16Float, "RTShadows.HistoryLength")
 
         super.init()
     }
@@ -92,7 +98,7 @@ class RTShadows: Pass {
     override func resize(renderWidth: Int, renderHeight: Int, outputWidth: Int, outputHeight: Int) {
         shadowMask.resize(width: renderWidth, height: renderHeight)
         for t in filtered { t.resize(width: renderWidth, height: renderHeight) }
-        for t in moments  { t.resize(width: renderWidth, height: renderHeight) }
+        for t in moments { t.resize(width: renderWidth, height: renderHeight) }
         prevFiltered.resize(width: renderWidth, height: renderHeight)
         prevMoments.resize(width: renderWidth, height: renderHeight)
         historyLength.resize(width: renderWidth, height: renderHeight)
@@ -112,12 +118,12 @@ class RTShadows: Pass {
         let w = shadowMask.texture.width
         let h = shadowMask.texture.height
 
-        let depth   = context.resources.get("GBuffer.Depth")  as Texture?
+        let depth = context.resources.get("GBuffer.Depth")  as Texture?
         let normals = context.resources.get("GBuffer.Normal") as Texture?
         guard let depth = depth, let normals = normals else { return }
 
         var parameters = RTShadowParameters()
-        parameters.spp        = UInt32(settings.int("RTShadows.SamplesPerPixel", default: 1))
+        parameters.spp = UInt32(settings.int("RTShadows.SamplesPerPixel", default: 1))
         parameters.frameIndex = accumulationFrame
 
         ift.setBuffer(context.sceneBuffer.buffer.buffer, offset: 0, index: 0)
@@ -133,30 +139,38 @@ class RTShadows: Pass {
         cp.setTexture(texture: normals,    index: 2)
         cp.dispatch(threads: MTLSizeMake((w + 7) / 8, (h + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1))
         cp.end()
+        
+        if !settings.bool("RTShadows.DenoisingEnabled") {
+            context.resources.register(shadowMask, for: "RTShadows.Output")
+        }
     }
 
     private func denoise(context: FrameContext) {
+        if !settings.bool("RTShadows.DenoisingEnabled") {
+            return
+        }
+        
         let w = filtered[ping].texture.width
         let h = filtered[ping].texture.height
 
-        let motionVectors   = context.resources.get("GBuffer.MotionVectors")   as Texture?
-        let normals         = context.resources.get("GBuffer.Normal")           as Texture?
+        let motionVectors = context.resources.get("GBuffer.MotionVectors")   as Texture?
+        let normals = context.resources.get("GBuffer.Normal")           as Texture?
         let previousNormals = context.resources.get("History.GBuffer.Normal")  as Texture?
-        guard let motionVectors = motionVectors,
-              let normals = normals,
-              let previousNormals = previousNormals else { return }
+        guard let motionVectors = motionVectors, let normals = normals, let previousNormals = previousNormals else { return }
 
         // 1. Temporal accumulation → filtered[ping], moments[ping]
         var temporalInput = RTShadowTemporalDenoiseInput(
-            shadow_mask:      shadowMask.texture.gpuResourceID,
-            motion_vectors:   motionVectors.texture.gpuResourceID,
-            current_normals:  normals.texture.gpuResourceID,
-            previous_normals: previousNormals.texture.gpuResourceID,
-            filtered:         filtered[ping].texture.gpuResourceID,
+            shadow_mask:       shadowMask.texture.gpuResourceID,
+            motion_vectors:    motionVectors.texture.gpuResourceID,
+            current_normals:   normals.texture.gpuResourceID,
+            previous_normals:  previousNormals.texture.gpuResourceID,
+            filtered:          filtered[ping].texture.gpuResourceID,
             previous_filtered: prevFiltered.texture.gpuResourceID,
-            moments:          moments[ping].texture.gpuResourceID,
-            previous_moments: prevMoments.texture.gpuResourceID,
-            history:          historyLength.texture.gpuResourceID
+            moments:           moments[ping].texture.gpuResourceID,
+            previous_moments:  prevMoments.texture.gpuResourceID,
+            history:           historyLength.texture.gpuResourceID,
+            depth_threshold:   settings.float("RTShadows.Denoiser.DepthThreshold", default: 0.15),
+            normal_threshold:  settings.float("RTShadows.Denoiser.NormalThreshold", default: 0.36)
         )
         
         // Temporal
@@ -176,12 +190,14 @@ class RTShadows: Pass {
         var writeIdx = pong
         for i in 0..<atrousIterations {
             var atrousInput = RTShadowAtrousInput(
-                input_shadow:   filtered[readIdx].texture.gpuResourceID,
-                motion_vectors: motionVectors.texture.gpuResourceID,
-                normals:        normals.texture.gpuResourceID,
-                moments:        moments[ping].texture.gpuResourceID,
-                output_shadow:  filtered[writeIdx].texture.gpuResourceID,
-                step_size:      Int32(1 << i)
+                input_shadow:     filtered[readIdx].texture.gpuResourceID,
+                motion_vectors:   motionVectors.texture.gpuResourceID,
+                normals:          normals.texture.gpuResourceID,
+                moments:          moments[ping].texture.gpuResourceID,
+                output_shadow:    filtered[writeIdx].texture.gpuResourceID,
+                step_size:        Int32(1 << i),
+                phi_normal_power: settings.float("RTShadows.Denoiser.NormalPower", default: 32.0),
+                phi_depth_factor: settings.float("RTShadows.Denoiser.DepthPhi", default: 0.01)
             )
             cp.intraPassBarrier(before: .dispatch, after: [.dispatch, .blit])
             cp.setPipeline(pipeline: atrousPipeline)

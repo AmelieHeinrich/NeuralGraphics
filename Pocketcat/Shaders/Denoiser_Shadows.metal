@@ -18,6 +18,8 @@ struct temporal_input
     texture2d<float, access::read_write> moments;
     texture2d<float> previous_moments;
     texture2d<float, access::read_write> history;
+    float depth_threshold;
+    float normal_threshold;
 };
 
 float estimate_spatial_variance(const device temporal_input& input, float2 curr_uv, int radius, float2 resolution)
@@ -41,6 +43,37 @@ float estimate_spatial_variance(const device temporal_input& input, float2 curr_
     float mean_sq = sum2 / count;
     float variance = mean_sq - mean * mean;
     return max(0.0f, variance);
+}
+
+bool plane_distance_disoccluion_check(float3 current_pos, float3 history_pos, float3 current_normal, float plane_distance_threshold)
+{
+    float3 to_current = current_pos - history_pos;
+    float dist_to_plane = abs(dot(to_current, current_normal));
+    
+    return dist_to_plane > plane_distance_threshold;
+}
+
+bool normals_disocclusion_check(float3 current_normal, float3 history_normal, float normal_distance_threshold)
+{
+    if (pow(abs(dot(current_normal, history_normal)), 2) > normal_distance_threshold)
+        return false;
+    else
+        return true;
+}
+
+float normal_edge_stopping_weight(float3 center_normal, float3 sample_normal, float power)
+{
+    return pow(clamp(dot(center_normal, sample_normal), 0.0f, 1.0f), power);
+}
+
+float depth_edge_stopping_weight(float center_depth, float sample_depth, float phi)
+{
+    return exp(-abs(center_depth - sample_depth) / phi);
+}
+
+float luma_edge_stopping_weight(float center_luma, float sample_luma, float phi)
+{
+    return abs(center_luma - sample_luma) / phi;
 }
 
 [[kernel]]
@@ -72,10 +105,10 @@ void denoise_shadows_temporal(const device temporal_input& input [[buffer(0)]],
         float prev_depth = input.motion_vectors.sample(s, prev_uv).z;
         float3 prev_normal = input.previous_normals.sample(s, prev_uv).rgb;
 
-        if (abs(depth - prev_depth) / max(depth, 0.01f) > 0.15f)
+        if (abs(depth - prev_depth) / max(depth, 0.01f) > input.depth_threshold)
             valid = false;
 
-        if (dot(normal, prev_normal) < 0.6f)
+        if (normals_disocclusion_check(normal, prev_normal, input.normal_threshold))
             valid = false;
     }
 
@@ -93,28 +126,8 @@ void denoise_shadows_temporal(const device temporal_input& input [[buffer(0)]],
 
     float alpha = max(0.05f, 1.0f / history_len);
     if (valid) {
-        // Use bilinear sampling for sub-pixel accuracy
         float prev_shadow = input.previous_filtered.sample(s_linear, prev_uv).r;
         float2 prev_moments = input.previous_moments.sample(s_linear, prev_uv).rg;
-
-        // Clamp history using neighborhood variance to suppress ghosting and wiggling
-        float m1 = 0.0f;
-        float m2 = 0.0f;
-        for (int ny = -1; ny <= 1; ny++) {
-            for (int nx = -1; nx <= 1; nx++) {
-                float ns = input.shadow_mask.sample(s, curr_uv + float2(nx, ny) / resolution).r;
-                m1 += ns;
-                m2 += ns * ns;
-            }
-        }
-        float mean = m1 / 9.0f;
-        float stddev = sqrt(max(0.0f, m2 / 9.0f - mean * mean));
-
-        float gamma = mix(1.0f, 2.0f, history_len / 128.0f);
-        float neigh_min = mean - stddev * gamma;
-        float neigh_max = mean + stddev * gamma;
-
-        prev_shadow = clamp(prev_shadow, neigh_min, neigh_max);
 
         accumulated_shadow = mix(prev_shadow, shadow, alpha);
         accumulated_moments = mix(prev_moments, float2(shadow, shadow * shadow), alpha);
@@ -135,16 +148,18 @@ void denoise_shadows_temporal(const device temporal_input& input [[buffer(0)]],
     input.moments.write(float4(accumulated_moments.x, accumulated_moments.y, variance, 1.0), gtid);
 }
 
-// ---- À-trous edge-aware spatial filter ----
+// À-trous
 
 struct atrous_input
 {
-    texture2d<float>                     input_shadow;
-    texture2d<float>                     motion_vectors;  // z = linear camera-space depth
-    texture2d<float>                     normals;
-    texture2d<float>                     moments;         // b = variance
+    texture2d<float> input_shadow;
+    texture2d<float> motion_vectors;
+    texture2d<float> normals;
+    texture2d<float> moments;
     texture2d<float, access::read_write> output_shadow;
-    int                                  step_size;
+    int step_size;
+    float phi_normal_power;
+    float phi_depth_factor;
 };
 
 [[kernel]]
@@ -156,31 +171,28 @@ void denoise_shadows_atrous(const device atrous_input& input [[buffer(0)]],
     if (gtid.x >= W || gtid.y >= H)
         return;
 
-    // À-trous wavelet kernel weights (1/16, 1/4, 3/8, 1/4, 1/16 → half h[0..2])
     const float h[3] = {3.0f/8.0f, 1.0f/4.0f, 1.0f/16.0f};
 
-    float  c_shadow  = input.input_shadow.read(gtid).r;
-    float  c_depth   = input.motion_vectors.read(gtid).z;
-    float3 c_normal  = input.normals.read(gtid).rgb;
-    float  variance  = input.moments.read(gtid).b;
-    // phi_s scales the luminance weight; larger variance → more smoothing allowed
-    float  stddev    = sqrt(max(0.0f, variance));
-    float  phi_s     = max(stddev, 1e-8f);
+    float c_shadow = input.input_shadow.read(gtid).r;
+    float c_depth = input.motion_vectors.read(gtid).z;
+    float3 c_normal = input.normals.read(gtid).rgb;
+    float variance = input.moments.read(gtid).b;
+    float stddev = sqrt(max(0.0f, variance));
+    float phi_s = max(stddev, 1e-8f);
 
     float sum_w = 0.0f, sum_s = 0.0f;
     for (int dy = -1; dy <= 1; dy++) {
         for (int dx = -1; dx <= 1; dx++) {
-            uint2 tap = uint2(clamp(int2(gtid) + int2(dx, dy) * input.step_size,
-                                   int2(0), int2(W - 1, H - 1)));
+            uint2 tap = uint2(clamp(int2(gtid) + int2(dx, dy) * input.step_size, int2(0), int2(W - 1, H - 1)));
 
             float  s = input.input_shadow.read(tap).r;
             float  d = input.motion_vectors.read(tap).z;
             float3 n = input.normals.read(tap).rgb;
 
-            float w_lum    = exp(-abs(s - c_shadow) / phi_s);
-            float w_depth  = exp(-abs(d - c_depth) / (c_depth * 0.01f + 1e-4f));
-            float w_normal = pow(max(0.0f, dot(n, c_normal)), 32.0f);
-            float w_kern   = h[abs(dx)] * h[abs(dy)];
+            float w_lum = exp(-luma_edge_stopping_weight(c_shadow, s, phi_s));
+            float w_depth = depth_edge_stopping_weight(c_depth, d, c_depth * input.phi_depth_factor + 1e-4f);
+            float w_normal = normal_edge_stopping_weight(c_normal, n, input.phi_normal_power);
+            float w_kern = h[abs(dx)] * h[abs(dy)];
 
             float w = w_lum * w_depth * w_normal * w_kern;
             sum_s += s * w;
