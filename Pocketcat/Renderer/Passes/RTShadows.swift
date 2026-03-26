@@ -48,8 +48,8 @@ class RTShadows: Pass {
     private var shadowMask: Texture
 
     // Temporal / à-trous ping-pong outputs
-    private var filtered: [Texture]  // [ping, pong]
-    private var moments: [Texture]   // [ping, pong]
+    private var filtered: [Texture]
+    private var moments: [Texture]
 
     // History (updated each frame before à-trous runs)
     private var prevFiltered: Texture

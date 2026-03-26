@@ -14,7 +14,9 @@ The project provides 3 baked meshes by default: cube, cube+sphere, and Crytek Sp
 
 ## Current features
 
-- Raytraced sun shadows
+- Raytraced sun shadows (denoiser wip)
+- Raytraced ambient occlusion (denoiser wip)
+- Raytraced global illumination (denoiser wip)
 - Mesh shaders
 - GPU driven debug renderer
 - GPU driven TLAS build
@@ -24,12 +26,11 @@ The project provides 3 baked meshes by default: cube, cube+sphere, and Crytek Sp
 
 ## Work in progress
 
-- SVGF
-- RTGI
-- RTAO
 - Nanite
 
 ## TODO
 
 - Inference engine
 - NNAO
+- Point lights in raster and PT
+- Clustered light culling
