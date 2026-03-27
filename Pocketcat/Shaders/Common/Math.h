@@ -91,6 +91,20 @@ inline float3 sample_cosine_hemisphere(float3 normal, float r1, float r2) {
     return normalize(t * local.x + b * local.y + normal * local.z);
 }
 
+inline float3 sample_ggx_hemisphere(float3 N, float3 V, float roughness, float r1, float r2) {
+    float alpha = roughness * roughness;
+    float theta_h = atan(alpha * sqrt(r1) / sqrt(max(1.0 - r1, 1e-6)));
+    float phi = 2.0 * M_PI_F * r2;
+    float sin_theta = sin(theta_h);
+    float cos_theta = cos(theta_h);
+    float3 local_h = float3(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
+    float3 up = abs(N.y) < 0.999 ? float3(0, 1, 0) : float3(1, 0, 0);
+    float3 t = normalize(cross(up, N));
+    float3 b = cross(N, t);
+    float3 H = normalize(t * local_h.x + b * local_h.y + N * local_h.z);
+    return reflect(-V, H);
+}
+
 inline float radians(float deg) {
     return deg * (M_PI_F / 180.0f);
 }

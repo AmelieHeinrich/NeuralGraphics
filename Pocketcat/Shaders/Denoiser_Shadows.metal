@@ -45,14 +45,6 @@ float estimate_spatial_variance(const device temporal_input& input, float2 curr_
     return max(0.0f, variance);
 }
 
-bool plane_distance_disoccluion_check(float3 current_pos, float3 history_pos, float3 current_normal, float plane_distance_threshold)
-{
-    float3 to_current = current_pos - history_pos;
-    float dist_to_plane = abs(dot(to_current, current_normal));
-    
-    return dist_to_plane > plane_distance_threshold;
-}
-
 bool normals_disocclusion_check(float3 current_normal, float3 history_normal, float normal_distance_threshold)
 {
     if (pow(abs(dot(current_normal, history_normal)), 2) > normal_distance_threshold)

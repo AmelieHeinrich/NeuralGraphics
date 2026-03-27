@@ -14,23 +14,27 @@ The project provides 3 baked meshes by default: cube, cube+sphere, and Crytek Sp
 
 ## Current features
 
-- Raytraced sun shadows (denoiser wip)
-- Raytraced ambient occlusion (denoiser wip)
-- Raytraced global illumination (denoiser wip)
-- Mesh shaders
 - GPU driven debug renderer
 - GPU driven TLAS build
-- Visibility buffer
+- GPU driven visibility buffer with mesh shaders
 - MetalFX spatial/temporal upscaling
 - Stochastic reference pathtracer
 
-## Work in progress
+## WIP
 
-- Nanite
+All of these features are complete on the raytracing part but are missing the denoiser I am currently working on:
+- Raytraced sun shadows
+- Raytraced ambient occlusion
+- Raytraced global illumination
+- Raytraced reflections
 
 ## TODO
 
+- Proper meshlet culling and LOD selection
 - Inference engine
-- NNAO
+- SSAO + NNAO
 - Point lights in raster and PT
 - Clustered light culling
+- Procedural atmospheric sky
+- Auto-exposure
+- Wavefront pathtracer with custom materials

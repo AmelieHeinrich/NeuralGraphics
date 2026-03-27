@@ -66,7 +66,7 @@ class RTShadows: Pass {
     init(settings: SettingsRegistry) {
         self.settings = settings
         self.settings.register(int: "RTShadows.SamplesPerPixel", label: "Samples per pixel", default: 1, range: 1...32)
-        self.settings.register(bool: "RTShadows.DenoisingEnabled", label: "Enable Denoising", default: true)
+        self.settings.register(bool: "RTShadows.DenoisingEnabled", label: "Enable Denoising", default: false)
         self.settings.register(float: "RTShadows.Denoiser.DepthThreshold", label: "Temporal Depth Threshold", default: 0.15, range: 0.01...1.0, step: 0.01)
         self.settings.register(float: "RTShadows.Denoiser.NormalThreshold", label: "Temporal Normal Threshold", default: 0.36, range: 0.0...1.0, step: 0.01)
         self.settings.register(float: "RTShadows.Denoiser.NormalPower", label: "Spatial Normal Power", default: 32.0, range: 1.0...128.0, step: 1.0)

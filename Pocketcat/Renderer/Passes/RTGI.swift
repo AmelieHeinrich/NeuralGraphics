@@ -94,7 +94,7 @@ class RTGI: Pass {
         parameters.spp = UInt32(settings.int("RTGI.SamplesPerPixel", default: 1))
         parameters.resolutionScale = scale
 
-        let cp = context.cmdBuffer.beginComputePass(name: "RTGI")
+        let cp = context.cmdBuffer.beginComputePass(name: "RTGI : Trace")
         cp.consumerBarrier(before: .dispatch, after: [.dispatch, .accelerationStructure])
         cp.setPipeline(pipeline: pipeline)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)

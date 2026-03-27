@@ -89,7 +89,7 @@ class RTAO: Pass {
         parameters.resolutionScale = scale
         parameters.aoRadius = settings.float("RTAO.Radius", default: 0.50)
 
-        let cp = context.cmdBuffer.beginComputePass(name: "RTAO")
+        let cp = context.cmdBuffer.beginComputePass(name: "RTAO : Trace")
         cp.consumerBarrier(before: .dispatch, after: [.dispatch, .accelerationStructure])
         cp.setPipeline(pipeline: pipeline)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)

@@ -190,12 +190,13 @@ class FrameManager {
         let rtgi = RTGI(settings: registry)
         let rtshadows = RTShadows(settings: registry)
         let rtao = RTAO(settings: registry)
+        let rtreflections = RTReflections(settings: registry)
         registry.register(bool: "Debug.DepthTest", label: "Depth Test", default: false)
         debug.registry = registry
 
         self.passes = [
             tlas, cullViewPass, visibilityPass, pathtracer, tonemap, upscaler, debug, gbufferPass,
-            deferred, accumulationDenoiser, rtgi, rtshadows, rtao,
+            deferred, accumulationDenoiser, rtgi, rtshadows, rtao, rtreflections,
         ]
 
         // Desktop pipeline
@@ -207,6 +208,7 @@ class FrameManager {
         desktopTimeline.addPass(rtgi)
         desktopTimeline.addPass(rtshadows)
         desktopTimeline.addPass(rtao)
+        desktopTimeline.addPass(rtreflections)
         desktopTimeline.addPass(deferred)
         desktopTimeline.addPass(tonemap)
         desktopTimeline.addPass(upscaler)

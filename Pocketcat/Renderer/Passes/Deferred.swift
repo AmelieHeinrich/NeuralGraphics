@@ -22,6 +22,9 @@ private struct DeferredParameters {
     var gi: UInt64 = 0
     var giResolutionScale: Float = 1.0
     var giEnabled: UInt32 = 0
+    var reflections: UInt64 = 0
+    var reflectionsResolutionScale: Float = 1.0
+    var reflectionsEnabled: UInt32 = 0
 }
 
 class DeferredPass: Pass {
@@ -53,6 +56,7 @@ class DeferredPass: Pass {
         let mask = context.resources.get("RTShadows.Output") as Texture?
         let ao = context.resources.get("RTAO.Mask") as Texture?
         let gi = context.resources.get("RTGI.Texture") as Texture?
+        let reflections = context.resources.get("RTReflections.Texture") as Texture?
 
         guard let depth = depth else { return }
         guard let albedo = albedo else { return }
@@ -81,6 +85,12 @@ class DeferredPass: Pass {
             params.gi = gi.texture.gpuResourceID._impl
             params.giResolutionScale = Float(gi.texture.width) / Float(depth.texture.width)
             params.giEnabled = 1
+        }
+
+        if let reflections = reflections {
+            params.reflections = reflections.texture.gpuResourceID._impl
+            params.reflectionsResolutionScale = Float(reflections.texture.width) / Float(depth.texture.width)
+            params.reflectionsEnabled = 1
         }
 
         let cp = context.cmdBuffer.beginComputePass(name: "Deferred")

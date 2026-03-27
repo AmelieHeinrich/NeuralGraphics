@@ -23,6 +23,9 @@ struct deferred_parameters {
     texture2d<float>                gi;
     float                           gi_resolution_scale;
     uint                            gi_enabled;
+    texture2d<float>                reflections;
+    float                           reflections_resolution_scale;
+    uint                            reflections_enabled;
 };
 
 [[kernel]]
@@ -102,7 +105,13 @@ void deferred_kernel(const device scene_data& scene [[buffer(0)]],
 
     float3 Lo = (diffuse * ao_value + specular) * light_color * NdotL * shadow;
 
+    float3 reflections_value = 0.0;
+    if (params.reflections_enabled) {
+        uint2 r_pixel = uint2(float2(gtid) * params.reflections_resolution_scale);
+        reflections_value = params.reflections.read(r_pixel).rgb;
+    }
+
     float3 ambient = kD * albedo * ao_value * gi_value;
-    float3 color = Lo + emissive + ambient;
+    float3 color = Lo + emissive + ambient + reflections_value;
     params.output.write(float4(color, 1.0), gtid);
 }
