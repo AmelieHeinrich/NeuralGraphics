@@ -30,7 +30,7 @@ class RTGI: Pass {
     init(settings: SettingsRegistry) {
         self.settings = settings
         self.settings.register(int: "RTGI.SamplesPerPixel", label: "Samples per pixel", default: 1, range: 1...32)
-        self.settings.register(bool: "RTGI.Enabled", label: "Enabled", default: true)
+        self.settings.register(bool: "RTGI.Enabled", label: "Enabled", default: false)
         self.settings.register(enum: "RTGI.TracingResolution", label: "Tracing Resolution", default: TracingResolution.Quarter)
 
         pipeline = ComputePipeline(function: "rtgi")
