@@ -13,9 +13,24 @@ class ComputePass {
     init(label: String, cmdBuffer: MTL4CommandBuffer) {
         self.encoder = cmdBuffer.makeComputeCommandEncoder()!
         self.encoder.label = label
+
+        if let heap = RendererData.counterHeap {
+            let slot = RendererData.counterOffset
+            RendererData.counterOffset += 1
+            RendererData.counterEntries.append((name: label, startSlot: slot, endSlot: -1))
+            self.encoder.writeTimestamp(granularity: .precise, counterHeap: heap, index: slot)
+        }
     }
 
     func end() {
+        if let heap = RendererData.counterHeap {
+            let slot = RendererData.counterOffset
+            RendererData.counterOffset += 1
+            if !RendererData.counterEntries.isEmpty {
+                RendererData.counterEntries[RendererData.counterEntries.count - 1].endSlot = slot
+            }
+            self.encoder.writeTimestamp(granularity: .precise, counterHeap: heap, index: slot)
+        }
         self.encoder.endEncoding()
     }
 
@@ -56,6 +71,7 @@ class ComputePass {
     }
 
     func dispatch(threads: MTLSize, threadsPerGroup: MTLSize) {
+        FrameAccumulator.current.computeDispatchCount += 1
         self.encoder.dispatchThreadgroups(
             threadgroupsPerGrid: threads, threadsPerThreadgroup: threadsPerGroup)
     }

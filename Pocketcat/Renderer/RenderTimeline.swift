@@ -5,6 +5,8 @@
 //  Created by Amélie Heinrich on 02/03/2026.
 //
 
+internal import QuartzCore
+
 // RenderTimeline holds *weak* handles to passes — it does not own them.
 // FrameManager owns the passes; the timeline is just the ordered execution plan.
 // This lets you hot-swap timelines (e.g. DesktopTimeline vs MobileTimeline)
@@ -24,7 +26,19 @@ class RenderTimeline {
 
     func execute(context: FrameContext) {
         for box in passes {
-            box.value?.render(context: context)
+            guard let pass = box.value else { continue }
+            let cpuStart = CACurrentMediaTime()
+            let gpuStart = RendererData.counterEntries.count
+            pass.render(context: context)
+            let cpuMs = (CACurrentMediaTime() - cpuStart) * 1000.0
+            FrameAccumulator.current.passRecords.append(
+                PassRecord(
+                    name: String(describing: type(of: pass)),
+                    cpuMs: cpuMs,
+                    gpuStartEntry: gpuStart,
+                    gpuEndEntry: RendererData.counterEntries.count
+                )
+            )
         }
     }
 }

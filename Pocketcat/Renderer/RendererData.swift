@@ -39,6 +39,15 @@ struct RendererData {
     static var tileTable: MTL4ArgumentTable!
     static var mlTable: MTL4ArgumentTable!
 
+    // Counter heap for per-encoder GPU timing (Metal4)
+    // nil if device doesn't support timestamp counters
+    static var counterHeap: (any MTL4CounterHeap)?
+    static let counterHeapSlotsPerFrame: Int = 64  // 2 × max_encoders per frame
+
+    // Render-thread-only state — reset at the start of each frame's recording window
+    static var counterOffset: Int = 0
+    static var counterEntries: [(name: String, startSlot: Int, endSlot: Int)] = []
+
     static func initialize(
         device: MTLDevice,
         cmdQueue: MTL4CommandQueue,
@@ -80,6 +89,12 @@ struct RendererData {
 
         self.mtl3commandQueue = device.makeCommandQueue()
         self.mtl3commandBuffer = mtl3commandQueue.makeCommandBuffer()
+
+        // Counter heap for GPU pass timing
+        let heapDesc = MTL4CounterHeapDescriptor()
+        heapDesc.type = .timestamp
+        heapDesc.count = counterHeapSlotsPerFrame * 3
+        Self.counterHeap = try? device.makeCounterHeap(descriptor: heapDesc)
     }
 
     static func waitIdle() {

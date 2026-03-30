@@ -74,9 +74,24 @@ class RenderPass {
 
         self.encoder = cmdBuffer.makeRenderCommandEncoder(descriptor: rpd)!
         self.encoder.label = descriptor.name
+
+        if let heap = RendererData.counterHeap {
+            let slot = RendererData.counterOffset
+            RendererData.counterOffset += 1
+            RendererData.counterEntries.append((name: descriptor.name, startSlot: slot, endSlot: -1))
+            self.encoder.writeTimestamp(granularity: .precise, after: .fragment, counterHeap: heap, index: slot)
+        }
     }
 
     func end() {
+        if let heap = RendererData.counterHeap {
+            let slot = RendererData.counterOffset
+            RendererData.counterOffset += 1
+            if !RendererData.counterEntries.isEmpty {
+                RendererData.counterEntries[RendererData.counterEntries.count - 1].endSlot = slot
+            }
+            self.encoder.writeTimestamp(granularity: .precise, after: .fragment, counterHeap: heap, index: slot)
+        }
         self.encoder.endEncoding()
     }
 
@@ -100,6 +115,7 @@ class RenderPass {
     }
 
     func draw(primitiveType: MTLPrimitiveType, vertexCount: Int, vertexOffset: Int) {
+        FrameAccumulator.current.directDrawCount += 1
         self.encoder.drawPrimitives(
             primitiveType: primitiveType, vertexStart: vertexOffset, vertexCount: vertexCount)
     }
@@ -107,6 +123,7 @@ class RenderPass {
     func drawIndexed(
         primitimeType: MTLPrimitiveType, buffer: Buffer, indexCount: Int, indexOffset: UInt64
     ) {
+        FrameAccumulator.current.directDrawCount += 1
         let byteOffset = indexOffset * UInt64(MemoryLayout<UInt32>.size)
         self.encoder.drawIndexedPrimitives(
             primitiveType: primitimeType, indexCount: indexCount, indexType: .uint32,
@@ -118,6 +135,7 @@ class RenderPass {
         threadgroupsPerGrid: MTLSize, threadsPerObjectThreadgroup: MTLSize,
         threadsPerMeshThreadgroup: MTLSize
     ) {
+        FrameAccumulator.current.directDrawCount += 1
         self.encoder.drawMeshThreadgroups(
             threadgroupsPerGrid: threadgroupsPerGrid,
             threadsPerObjectThreadgroup: threadsPerObjectThreadgroup,
@@ -125,6 +143,7 @@ class RenderPass {
     }
 
     func executeIndirect(icb: ICB, maxCommandCount: Int) {
+        FrameAccumulator.current.executeIndirectCount += 1
         self.encoder.executeCommands(buffer: icb.cmdBuffer, range: 0..<maxCommandCount)
     }
 

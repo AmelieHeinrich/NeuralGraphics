@@ -16,14 +16,16 @@ protocol MetalViewDelegate: MTKViewDelegate {
 
 class Renderer: NSObject, MetalViewDelegate {
     let device: MTLDevice
+    let frameStats: FrameStats
 
     private let commandQueue: MTL4CommandQueue
     private let residencySet: MTLResidencySet
     private let compiler: MTL4Compiler
     private let frameManager: FrameManager
 
-    init(device: MTLDevice, registry: SettingsRegistry, lightState: LightState) {
+    init(device: MTLDevice, registry: SettingsRegistry, lightState: LightState, frameStats: FrameStats) {
         self.device = device
+        self.frameStats = frameStats
 
         let cmdQueueDescriptor = MTL4CommandQueueDescriptor()
         cmdQueueDescriptor.label = "Main Graphics Queue"
@@ -46,7 +48,7 @@ class Renderer: NSObject, MetalViewDelegate {
             residencySet: self.residencySet,
             compiler: self.compiler)
 
-        self.frameManager = FrameManager(registry: registry, lightState: lightState)
+        self.frameManager = FrameManager(registry: registry, lightState: lightState, frameStats: frameStats)
     }
 
     func setScene(_ scene: RenderScene) {

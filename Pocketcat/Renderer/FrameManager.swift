@@ -43,10 +43,19 @@ class FrameManager {
 
     var scene: RenderScene?
 
-    init(registry: SettingsRegistry, lightState: LightState) {
+    // Stats
+    private let frameStats: FrameStats
+    private var savedCounterEntries: [[(name: String, startSlot: Int, endSlot: Int)]]
+    private var lastFrameTime: CFAbsoluteTime = CFAbsoluteTimeGetCurrent()
+    private var frameTimeMsAccum: Double = 0
+    private var fpsAccum: Double = 0
+
+    init(registry: SettingsRegistry, lightState: LightState, frameStats: FrameStats) {
         self.registry = registry
         self.lightState = lightState
         self.controller = EditorRendererController(registry: registry)
+        self.frameStats = frameStats
+        self.savedCounterEntries = Array(repeating: [], count: 3)
 
         self.commandBuffers = (0..<3).map { i in
             let cb = CommandBuffer()
@@ -87,6 +96,13 @@ class FrameManager {
 
     func render(drawable: CAMetalDrawable) {
         autoreleasepool {
+            // CPU frame timing
+            let now = CFAbsoluteTimeGetCurrent()
+            let frameTimeMs = (now - lastFrameTime) * 1000.0
+            lastFrameTime = now
+            frameTimeMsAccum += frameTimeMs
+            fpsAccum += frameTimeMs > 0 ? (1000.0 / frameTimeMs) : 0
+
             let currentScale = registry.float("Renderer.RenderScale", default: 1.0)
             if currentScale != lastRenderScale {
                 lastRenderScale = currentScale
@@ -107,6 +123,11 @@ class FrameManager {
 
             // Wait for cmdBuffer to be ready
             RendererData.gpuTimeline.wait(value: frameIndex)
+
+            // Reset per-frame stats accumulation
+            FrameAccumulator.current = FrameAccumulator()
+            RendererData.counterOffset = ringIndex * RendererData.counterHeapSlotsPerFrame
+            RendererData.counterEntries = []
 
             // Reset, record
             allocator.reset()
@@ -151,6 +172,10 @@ class FrameManager {
             // Update lights after updateCamera() has advanced currentFrameIndex
             sceneBuffer.updateLights(sun: lightState.gpuSun(), pointLights: lightState.gpuPointLights())
 
+            // Snapshot accumulator state before commit (render-thread data)
+            let frameAccumSnapshot = FrameAccumulator.current
+            let counterEntriesSnapshot = RendererData.counterEntries
+
             // Commit
             cmdBuffer.end()
             cmdBuffer.commit()
@@ -158,15 +183,109 @@ class FrameManager {
             RendererData.cmdQueue.signalEvent(RendererData.gpuTimeline.event, value: frameIndex + 1)
             RendererData.cmdQueue.waitForEvent(
                 RendererData.gpuTimeline.event, value: frameIndex + 1)
+
+            // GPU work for this frame is now done — resolve counter heap timestamps
+            let gpuTimings = resolveCounterHeap(
+                ringIndex: ringIndex,
+                accumulator: frameAccumSnapshot,
+                counterEntries: counterEntriesSnapshot)
+
             frameIndex += 1
 
             RendererData.cmdQueue.waitForDrawable(drawable)
             RendererData.cmdQueue.signalDrawable(drawable)
             drawable.present()
 
+            // Publish stats every 16 frames (~8 Hz at 120 fps)
+            if frameIndex % 16 == 0 {
+                let avgFrameMs = frameTimeMsAccum / 16.0
+                let avgFps     = fpsAccum / 16.0
+                frameTimeMsAccum = 0
+                fpsAccum = 0
+
+                let scale = Float(currentScale)
+                let rw = max(1, Int(Float(viewportWidth)  * scale))
+                let rh = max(1, Int(Float(viewportHeight) * scale))
+                let allocatedMB = Double(RendererData.device.currentAllocatedSize) / (1024.0 * 1024.0)
+
+                let timelineName: String
+                switch registry.enum("Renderer.Timeline", as: RendererTimelineType.self, default: .Desktop) {
+                case .Desktop:   timelineName = "Desktop"
+                case .Pathtraced: timelineName = "Pathtraced"
+                case .Mobile:    timelineName = "Mobile"
+                }
+
+                let snapshot = FrameSnapshot(
+                    frameTimeMs: avgFrameMs,
+                    fps: avgFps,
+                    renderWidth: rw,
+                    renderHeight: rh,
+                    outputWidth: viewportWidth,
+                    outputHeight: viewportHeight,
+                    renderScale: scale,
+                    activeTimeline: timelineName,
+                    passTimings: gpuTimings,
+                    executeIndirectCount: frameAccumSnapshot.executeIndirectCount,
+                    directDrawCount: frameAccumSnapshot.directDrawCount,
+                    computeDispatchCount: frameAccumSnapshot.computeDispatchCount,
+                    gpuAllocatedMB: allocatedMB
+                )
+
+                let stats = self.frameStats
+                DispatchQueue.main.async {
+                    stats.update(from: snapshot)
+                }
+            }
+
             Input.shared.beginFrame()
         }
     }
+
+    // MARK: - Counter Heap Resolution
+
+    private func resolveCounterHeap(
+        ringIndex: Int,
+        accumulator: FrameAccumulator,
+        counterEntries: [(name: String, startSlot: Int, endSlot: Int)]
+    ) -> [PassTimingSample] {
+        let cpuOnly = accumulator.passRecords.map {
+            PassTimingSample(name: $0.name, cpuMs: $0.cpuMs, gpuMs: 0)
+        }
+
+        guard let heap = RendererData.counterHeap else { return cpuOnly }
+
+        let baseSlot = ringIndex * RendererData.counterHeapSlotsPerFrame
+        let slotRange = baseSlot..<(baseSlot + RendererData.counterHeapSlotsPerFrame)
+
+        guard let data = try? heap.resolveCounterRange(slotRange) else { return cpuOnly }
+
+        // Timestamp counter heap data is an array of UInt64 GPU nanosecond values.
+        // MTL4CounterHeapType.timestamp entries are UInt64 (8 bytes each).
+        // On Apple Silicon, GPU ns are directly comparable; delta → ms via / 1_000_000.
+        return data.withUnsafeBytes { rawPtr in
+            let entries = rawPtr.bindMemory(to: MTL4TimestampHeapEntry.self)
+            let invalid: UInt64 = 0xFFFF_FFFF_FFFF_FFFF
+
+            return accumulator.passRecords.map { record in
+                var totalGpuMs = 0.0
+                for entryIdx in record.gpuStartEntry..<record.gpuEndEntry {
+                    guard entryIdx < counterEntries.count else { continue }
+                    let entry = counterEntries[entryIdx]
+                    guard entry.endSlot >= 0 else { continue }
+                    let si = entry.startSlot - baseSlot
+                    let ei = entry.endSlot   - baseSlot
+                    guard si >= 0, ei < entries.count else { continue }
+                    let startNs = entries[si].timestamp
+                    let endNs   = entries[ei].timestamp
+                    guard startNs != invalid, endNs != invalid, endNs > startNs else { continue }
+                    totalGpuMs += Double(endNs - startNs) / 1_000_000.0
+                }
+                return PassTimingSample(name: record.name, cpuMs: record.cpuMs, gpuMs: totalGpuMs)
+            }
+        }
+    }
+
+    // MARK: - Timeline Setup
 
     func setupTimelines(registry: SettingsRegistry) {
         // Register global settings first so they appear at the top of the UI

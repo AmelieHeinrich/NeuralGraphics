@@ -255,6 +255,7 @@ private struct SideColumn: View {
     let side: PanelSide
     let registry: SettingsRegistry
     let lightState: LightState
+    let frameStats: FrameStats
     @Binding var activePanels: Set<String>
 
     private var visiblePanels: [PanelDef] {
@@ -283,8 +284,9 @@ private struct SideColumn: View {
                             isBottomInColumn: isBottom
                         ) {
                             switch panel.id {
-                            case "world": WorldView(lightState: lightState)
+                            case "world":    WorldView(lightState: lightState)
                             case "settings": SettingsView(registry: registry)
+                            case "stats":    StatsView(stats: frameStats)
                             default:
                                 PlaceholderPanelView(
                                     title: panel.label,
@@ -331,6 +333,7 @@ private class AppState: ObservableObject {
     let registry: SettingsRegistry
     let renderer: Renderer
     let lightState: LightState
+    let frameStats: FrameStats
 
     init() {
         guard let device = MTLCreateSystemDefaultDevice() else {
@@ -338,9 +341,11 @@ private class AppState: ObservableObject {
         }
         let r = SettingsRegistry()
         let lights = LightState()
+        let stats = FrameStats()
         self.registry = r
         self.lightState = lights
-        self.renderer = Renderer(device: device, registry: r, lightState: lights)
+        self.frameStats = stats
+        self.renderer = Renderer(device: device, registry: r, lightState: lights, frameStats: stats)
     }
 }
 
@@ -360,8 +365,8 @@ private struct RenderView: View {
             MetalView(delegate: appState.renderer)
                 .ignoresSafeArea()
 
-            SideColumn(side: .left, registry: appState.registry, lightState: appState.lightState, activePanels: $activePanels)
-            SideColumn(side: .right, registry: appState.registry, lightState: appState.lightState, activePanels: $activePanels)
+            SideColumn(side: .left, registry: appState.registry, lightState: appState.lightState, frameStats: appState.frameStats, activePanels: $activePanels)
+            SideColumn(side: .right, registry: appState.registry, lightState: appState.lightState, frameStats: appState.frameStats, activePanels: $activePanels)
 
             VStack {
                 Spacer()
