@@ -20,6 +20,7 @@ struct temporal_input
     texture2d<float, access::read_write> history;
     float depth_threshold;
     float normal_threshold;
+    float alpha;
 };
 
 // Weight functions used for à-trous
@@ -213,7 +214,7 @@ void denoise_shadows_temporal(const device temporal_input& input [[buffer(0)]],
         history_shadow = clip_aabb(radiance_min, radiance_max, history_shadow);
     }
 
-    float alpha = success ? max(0.05f, 1.0f / history_length) : 1.0f;
+    float alpha = success ? input.alpha : 1.0f;
 
     // Compute first two moments of luminance for variance estimation and temporally integrate
     float2 moments = float2(shadow, shadow * shadow);

@@ -25,6 +25,7 @@ struct RTShadowTemporalDenoiseInput {
     var history: MTLResourceID
     var depth_threshold: Float
     var normal_threshold: Float
+    var alpha: Float
 }
 
 struct RTShadowVarianceEstimationInput {
@@ -72,14 +73,16 @@ class RTShadows: Pass {
     private var accumulationFrame: UInt32 = 0
     private unowned var settings: SettingsRegistry
 
-    let atrousIterations = 3
-
     init(settings: SettingsRegistry) {
         self.settings = settings
         self.settings.register(
             int: "RTShadows.SamplesPerPixel", label: "Samples per pixel", default: 1, range: 1...32)
         self.settings.register(
             bool: "RTShadows.DenoisingEnabled", label: "Enable Denoising", default: false)
+        self.settings.register(
+            bool: "RTShadows.Denoiser.TemporalEnabled", label: "Enable Temporal Denoising", default: true)
+        self.settings.register(
+            bool: "RTShadows.Denoiser.SpatialEnabled", label: "Enable Spatial Denoising", default: true)
         self.settings.register(
             float: "RTShadows.Denoiser.DepthThreshold", label: "Temporal Depth Threshold",
             default: 0.15, range: 0.01...1.0, step: 0.01)
@@ -92,6 +95,11 @@ class RTShadows: Pass {
         self.settings.register(
             float: "RTShadows.Denoiser.NormalPhi", label: "Normal Phi", default: 128.0,
             range: 1.0...256.0, step: 1.0)
+        self.settings.register(
+            float: "RTShadows.Denoiser.Alpha", label: "Temporal Alpha", default: 0.05,
+            range: 0.01...1.0, step: 0.01)
+        self.settings.register(
+            int: "RTShadows.Denoiser.AtrousIterations", label: "À-Trous Iterations", default: 3, range: 1...8)
 
         tracePipeline = ComputePipeline(function: "rt_shadows", linkedFunctions: ["alpha_any_hit"])
         temporalPipeline = ComputePipeline(function: "denoise_shadows_temporal")
@@ -137,13 +145,29 @@ class RTShadows: Pass {
     override func render(context: FrameContext) {
         guard context.scene != nil else { return }
 
-        traceShadowRays(context: context)
-        denoise(context: context)
+        let denoisingEnabled = settings.bool("RTShadows.DenoisingEnabled")
+        let temporalEnabled  = denoisingEnabled && settings.bool("RTShadows.Denoiser.TemporalEnabled")
+        let spatialEnabled   = denoisingEnabled && settings.bool("RTShadows.Denoiser.SpatialEnabled")
+
+        let cp = context.cmdBuffer.beginComputePass(name: "RT Shadows")
+        recordTrace(context: context, cp: cp)
+
+        if temporalEnabled || spatialEnabled {
+            cp.intraPassBarrier(before: .dispatch, after: .dispatch)
+            let output = recordDenoise(context: context, cp: cp,
+                                       temporalEnabled: temporalEnabled,
+                                       spatialEnabled: spatialEnabled)
+            cp.end()
+            context.resources.register(output, for: "RTShadows.Output")
+        } else {
+            cp.end()
+            context.resources.register(shadowMask, for: "RTShadows.Output")
+        }
 
         accumulationFrame &+= 1
     }
 
-    private func traceShadowRays(context: FrameContext) {
+    private func recordTrace(context: FrameContext, cp: ComputePass) {
         let w = shadowMask.texture.width
         let h = shadowMask.texture.height
 
@@ -157,7 +181,6 @@ class RTShadows: Pass {
 
         ift.setBuffer(context.sceneBuffer.buffer.buffer, offset: 0, index: 0)
 
-        let cp = context.cmdBuffer.beginComputePass(name: "RT Shadows: Trace")
         cp.consumerBarrier(before: .dispatch, after: [.dispatch, .accelerationStructure, .fragment])
         cp.setPipeline(pipeline: tracePipeline)
         cp.setBuffer(buf: context.sceneBuffer.buffer, index: 0)
@@ -169,18 +192,10 @@ class RTShadows: Pass {
         cp.dispatch(
             threads: MTLSizeMake((w + 7) / 8, (h + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1)
         )
-        cp.end()
-
-        if !settings.bool("RTShadows.DenoisingEnabled") {
-            context.resources.register(shadowMask, for: "RTShadows.Output")
-        }
     }
 
-    private func denoise(context: FrameContext) {
-        if !settings.bool("RTShadows.DenoisingEnabled") {
-            return
-        }
-
+    @discardableResult
+    private func recordDenoise(context: FrameContext, cp: ComputePass, temporalEnabled: Bool, spatialEnabled: Bool) -> Texture {
         let w = filtered[ping].texture.width
         let h = filtered[ping].texture.height
 
@@ -189,40 +204,43 @@ class RTShadows: Pass {
         let previousNormals = context.resources.get("History.GBuffer.Normal") as Texture?
         guard let motionVectors = motionVectors, let normals = normals,
             let previousNormals = previousNormals
-        else { return }
+        else { return shadowMask }
 
-        // 1. Temporal accumulation → filtered[ping], moments[ping]
-        var temporalInput = RTShadowTemporalDenoiseInput(
-            shadow_mask: shadowMask.texture.gpuResourceID,
-            motion_vectors: motionVectors.texture.gpuResourceID,
-            current_normals: normals.texture.gpuResourceID,
-            previous_normals: previousNormals.texture.gpuResourceID,
-            filtered: filtered[ping].texture.gpuResourceID,
-            previous_filtered: prevFiltered.texture.gpuResourceID,
-            moments: moments[ping].texture.gpuResourceID,
-            previous_moments: prevMoments.texture.gpuResourceID,
-            history: historyLength.texture.gpuResourceID,
-            depth_threshold: settings.float("RTShadows.Denoiser.DepthThreshold", default: 0.15),
-            normal_threshold: settings.float("RTShadows.Denoiser.NormalThreshold", default: 0.36)
-        )
+        if temporalEnabled {
+            var temporalInput = RTShadowTemporalDenoiseInput(
+                shadow_mask: shadowMask.texture.gpuResourceID,
+                motion_vectors: motionVectors.texture.gpuResourceID,
+                current_normals: normals.texture.gpuResourceID,
+                previous_normals: previousNormals.texture.gpuResourceID,
+                filtered: filtered[ping].texture.gpuResourceID,
+                previous_filtered: prevFiltered.texture.gpuResourceID,
+                moments: moments[ping].texture.gpuResourceID,
+                previous_moments: prevMoments.texture.gpuResourceID,
+                history: historyLength.texture.gpuResourceID,
+                depth_threshold: settings.float("RTShadows.Denoiser.DepthThreshold", default: 0.15),
+                normal_threshold: settings.float("RTShadows.Denoiser.NormalThreshold", default: 0.36),
+                alpha: settings.float("RTShadows.Denoiser.Alpha", default: 0.05)
+            )
+            cp.setPipeline(pipeline: temporalPipeline)
+            cp.setBytes(allocator: context.allocator, index: 0, bytes: &temporalInput, size: MemoryLayout<RTShadowTemporalDenoiseInput>.size)
+            cp.dispatch(
+                threads: MTLSizeMake((w + 7) / 8, (h + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1)
+            )
 
-        // Temporal
-        let cp = context.cmdBuffer.beginComputePass(name: "RT Shadows : Denoise")
-        cp.consumerBarrier(before: .dispatch, after: .dispatch)
-        cp.setPipeline(pipeline: temporalPipeline)
-        cp.setBytes(allocator: context.allocator, index: 0, bytes: &temporalInput, size: MemoryLayout<RTShadowTemporalDenoiseInput>.size)
-        cp.dispatch(
-            threads: MTLSizeMake((w + 7) / 8, (h + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1)
-        )
+            cp.intraPassBarrier(before: .blit, after: .dispatch)
+            cp.copyTexture(src: filtered[ping], dst: prevFiltered)
+            cp.copyTexture(src: moments[ping], dst: prevMoments)
+        }
 
-        // Copy history
-        cp.intraPassBarrier(before: .blit, after: .dispatch)
-        cp.copyTexture(src: filtered[ping], dst: prevFiltered)
-        cp.copyTexture(src: moments[ping], dst: prevMoments)
+        guard spatialEnabled else {
+            // Temporal-only output; ping/pong stays as-is
+            return temporalEnabled ? filtered[ping] : shadowMask
+        }
 
-        // Variance Estimation
+        // Variance estimation — feed temporal output or raw mask when temporal is off
+        let varianceInput_shadow = temporalEnabled ? filtered[ping] : shadowMask
         var varianceInput = RTShadowVarianceEstimationInput(
-            input_shadow: filtered[ping].texture.gpuResourceID,
+            input_shadow: varianceInput_shadow.texture.gpuResourceID,
             normals: normals.texture.gpuResourceID,
             motion_vectors: motionVectors.texture.gpuResourceID,
             moments: moments[ping].texture.gpuResourceID,
@@ -238,9 +256,9 @@ class RTShadows: Pass {
             threads: MTLSizeMake((w + 7) / 8, (h + 7) / 8, 1), threadsPerGroup: MTLSizeMake(8, 8, 1)
         )
 
-        // Spatial
         var readIdx = pong
         var writeIdx = ping
+        let atrousIterations = settings.int("RTShadows.Denoiser.AtrousIterations", default: 3)
         for i in 0..<atrousIterations {
             var atrousInput = RTShadowAtrousInput(
                 input_shadow: filtered[readIdx].texture.gpuResourceID,
@@ -262,10 +280,8 @@ class RTShadows: Pass {
             )
             swap(&readIdx, &writeIdx)
         }
-        cp.end()
 
         swap(&ping, &pong)
-
-        context.resources.register(filtered[readIdx], for: "RTShadows.Output")
+        return filtered[readIdx]
     }
 }

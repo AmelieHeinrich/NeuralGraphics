@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 // MARK: - Sun Arcball Gizmo
 
@@ -182,9 +183,21 @@ struct WorldView: View {
 
     private var sunSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Sun Light", systemImage: "sun.max.fill")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.yellow)
+            HStack {
+                Label("Sun Light", systemImage: "sun.max.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.yellow)
+                Spacer()
+                Button {
+                    lightState.isSunAnimating.toggle()
+                } label: {
+                    Label(lightState.isSunAnimating ? "Stop" : "Animate",
+                          systemImage: lightState.isSunAnimating ? "stop.fill" : "arrow.trianglehead.2.clockwise.rotate.90")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(lightState.isSunAnimating ? .red : .yellow)
+                }
+                .buttonStyle(.plain)
+            }
 
             Picker("Mode", selection: $lightState.sunMode) {
                 ForEach(SunMode.allCases, id: \.self) { mode in
@@ -229,7 +242,7 @@ struct WorldView: View {
                               format: "%.1f")
             }
 
-            LabeledSlider(label: "RT Radius", value: $lightState.sunRadius, range: 0.0...0.5,
+            LabeledSlider(label: "Sun Radius", value: $lightState.sunRadius, range: 0.0...15.0,
                           format: "%.3f")
         }
     }

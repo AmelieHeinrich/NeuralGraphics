@@ -46,6 +46,24 @@ class LightState: ObservableObject {
     // Point lights
     @Published var pointLights: [PointLightEntry] = []
 
+    // Sun animation
+    @Published var isSunAnimating: Bool = false {
+        didSet {
+            if isSunAnimating {
+                sunMode = .manual
+                animationCancellable = Timer.publish(every: 1.0 / 60.0, on: .main, in: .common)
+                    .autoconnect()
+                    .sink { [weak self] _ in
+                        guard let self else { return }
+                        self.sunAzimuth = (self.sunAzimuth + 0.5).truncatingRemainder(dividingBy: 360)
+                    }
+            } else {
+                animationCancellable = nil
+            }
+        }
+    }
+    private var animationCancellable: AnyCancellable?
+
     // MARK: - Computed sun direction
 
     var sunDirection: SIMD3<Float> {
