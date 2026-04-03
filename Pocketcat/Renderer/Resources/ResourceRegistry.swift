@@ -26,9 +26,16 @@ struct VisualizerEntry {
     var fragmentFunction: String
 }
 
+struct CubemapVisualizerEntry {
+    var texture: Texture
+    var label: String
+    var fragmentFunction: String
+}
+
 class ResourceRegistry {
     private var resources: [String: Any] = [:]
     private var visualizers: [VisualizerEntry] = []
+    private var cubemapVisualizers: [CubemapVisualizerEntry] = []
 
     func register<T>(_ resource: T, for key: String) {
         resources[key] = resource
@@ -44,8 +51,15 @@ class ResourceRegistry {
 
     func getVisualizers() -> [VisualizerEntry] { visualizers }
 
+    func addCubemapVisualizer(texture: Texture, label: String, fragmentFunction: String = "texviz_cubemap_passthrough_fs") {
+        cubemapVisualizers.append(CubemapVisualizerEntry(texture: texture, label: label, fragmentFunction: fragmentFunction))
+    }
+
+    func getCubemapVisualizers() -> [CubemapVisualizerEntry] { cubemapVisualizers }
+
     func clear() {
         resources.removeAll(keepingCapacity: true)
         visualizers.removeAll(keepingCapacity: true)
+        cubemapVisualizers.removeAll(keepingCapacity: true)
     }
 }

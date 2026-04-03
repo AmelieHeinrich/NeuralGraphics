@@ -164,3 +164,44 @@ float4 texviz_shadow_history_acceptance_fs(texviz_vs_out in [[stage_in]],
     // red = rejected/reset (history_length <= 1), blue = accepted
     return h <= 1.0 ? float4(1.0, 0.0, 0.0, 1.0) : float4(0.0, 0.0, 1.0, 1.0);
 }
+
+// -------------------------------------------------------------------------
+// Cubemap visualizer — sphere or cube geometry, arcball rotation
+// -------------------------------------------------------------------------
+
+struct CubemapVizUniforms {
+    float4x4 mvp;
+};
+
+struct cubeviz_vs_out {
+    float4 position [[position]];
+    float3 direction;
+};
+
+[[vertex]]
+cubeviz_vs_out texviz_cubemap_vs(uint vid                         [[vertex_id]],
+                                 constant CubemapVizUniforms& u  [[buffer(0)]],
+                                 const device float3* verts       [[buffer(1)]]) {
+    float3 pos = verts[vid];
+    cubeviz_vs_out o;
+    o.position  = u.mvp * float4(pos, 1.0);
+    o.direction = pos;  // vertex position on unit sphere/cube = sample direction
+    return o;
+}
+
+[[fragment]]
+float4 texviz_cubemap_passthrough_fs(cubeviz_vs_out in [[stage_in]],
+                                     texturecube<float> cube [[texture(0)]]) {
+    constexpr sampler s(filter::linear);
+    float3 c = cube.sample(s, in.direction).rgb;
+    c = c / (1.0 + c);
+    return float4(c, 1.0);
+}
+
+[[fragment]]
+float4 texviz_cubemap_irradiance_fs(cubeviz_vs_out in [[stage_in]],
+                                    texturecube<float> cube [[texture(0)]]) {
+    constexpr sampler s(filter::linear);
+    float3 c = cube.sample(s, in.direction).rgb;
+    return float4(c, 1.0);
+}

@@ -13,20 +13,20 @@ import simd
 // alignment 4 while Metal float3 has alignment 16; float4 has alignment 16 in both).
 struct AtmosphereParameters {
     var rayleighScattering: simd_float4 = simd_float4(5.802, 13.558, 33.1, 0)  // Mm^-1
-    var rayleighScaleHeight: Float = 8.0   // km
+    var rayleighScaleHeight: Float = 8.0  // km
     var rayleighAbsorptionBase: Float = 0.0
-    var mieScattering: Float = 3.996       // Mm^-1
-    var mieAbsorption: Float = 4.4         // Mm^-1
-    var mieScaleHeight: Float = 1.2        // km
+    var mieScattering: Float = 3.996  // Mm^-1
+    var mieAbsorption: Float = 4.4  // Mm^-1
+    var mieScaleHeight: Float = 1.2  // km
     var miePhaseG: Float = 0.8
-    var _pad0: simd_float2 = .zero         // explicit padding to match Metal layout
-    var ozoneAbsorption: simd_float4 = simd_float4(0.650, 1.881, 0.085, 0)    // Mm^-1
+    var _pad0: simd_float2 = .zero  // explicit padding to match Metal layout
+    var ozoneAbsorption: simd_float4 = simd_float4(0.650, 1.881, 0.085, 0)  // Mm^-1
     var groundAlbedo: simd_float4 = simd_float4(0.3, 0.3, 0.3, 0)
     var groundRadiusMm: Float = 6.36
     var atmosphereRadiusMm: Float = 6.46
     var skyIntensity: Float = 5.0
     var sunDiskIntensity: Float = 20.0
-    var sunDiskSize: Float = 2.0      // degrees
+    var sunDiskSize: Float = 2.0  // degrees
 }
 
 class SkyPass: Pass {
@@ -36,37 +36,50 @@ class SkyPass: Pass {
     private let cubemapPipeline: ComputePipeline
 
     // Fixed-size LUT textures (not viewport-dependent)
-    private let transmittanceLUT: Texture    // 256×64
-    private let multipleScatteringLUT: Texture // 32×32
-    private let skyViewLUT: Texture           // 200×100
-    private let skyCubemap: Texture           // cube 128×128
+    private let transmittanceLUT: Texture  // 256×64
+    private let multipleScatteringLUT: Texture  // 32×32
+    private let skyViewLUT: Texture  // 200×100
+    private let skyCubemap: Texture  // cube 128×128
 
     private unowned var settings: SettingsRegistry
 
     init(settings: SettingsRegistry) {
         self.settings = settings
         settings.register(bool: "Sky.Enabled", label: "Sky Enabled", default: true)
-        settings.register(float: "Sky.MiePhaseG", label: "Sky Mie Phase G", default: 0.8, range: 0.0...0.999, step: 0.01)
-        settings.register(float: "Sky.Intensity", label: "Sky Intensity", default: 5.0, range: 0.1...50.0, step: 0.1)
-        settings.register(float: "Sky.SunDiskIntensity", label: "Sun Disk Intensity", default: 20.0, range: 0.0...500.0, step: 1.0)
-        settings.register(float: "Sky.SunDiskSize", label: "Sun Disk Size (deg)", default: 2.0, range: 0.5...20.0, step: 0.1)
+        settings.register(
+            float: "Sky.MiePhaseG", label: "Sky Mie Phase G", default: 0.8, range: 0.0...0.999,
+            step: 0.01)
+        settings.register(
+            float: "Sky.Intensity", label: "Sky Intensity", default: 5.0, range: 0.1...50.0,
+            step: 0.1)
+        settings.register(
+            float: "Sky.SunDiskIntensity", label: "Sun Disk Intensity", default: 20.0,
+            range: 0.0...500.0, step: 1.0)
+        settings.register(
+            float: "Sky.SunDiskSize", label: "Sun Disk Size (deg)", default: 2.0, range: 0.5...20.0,
+            step: 0.1)
 
-        transmittancePipeline = ComputePipeline(function: "transmittance_lut", name: "Sky Transmittance LUT")
-        multipleScatteringPipeline = ComputePipeline(function: "multiple_scattering_lut", name: "Sky Multiple Scattering LUT")
+        transmittancePipeline = ComputePipeline(
+            function: "transmittance_lut", name: "Sky Transmittance LUT")
+        multipleScatteringPipeline = ComputePipeline(
+            function: "multiple_scattering_lut", name: "Sky Multiple Scattering LUT")
         skyViewPipeline = ComputePipeline(function: "sky_view_lut", name: "Sky View LUT")
         cubemapPipeline = ComputePipeline(function: "bake_skybox_cubemap", name: "Sky Cubemap Bake")
 
-        let tlutDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: 256, height: 64, mipmapped: false)
+        let tlutDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: 256, height: 64, mipmapped: false)
         tlutDesc.usage = [.shaderRead, .shaderWrite]
         transmittanceLUT = Texture(descriptor: tlutDesc)
         transmittanceLUT.setLabel(name: "Sky Transmittance LUT")
 
-        let msDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: 32, height: 32, mipmapped: false)
+        let msDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: 32, height: 32, mipmapped: false)
         msDesc.usage = [.shaderRead, .shaderWrite]
         multipleScatteringLUT = Texture(descriptor: msDesc)
         multipleScatteringLUT.setLabel(name: "Sky Multiple Scattering LUT")
 
-        let svDesc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: 200, height: 100, mipmapped: false)
+        let svDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba16Float, width: 200, height: 100, mipmapped: false)
         svDesc.usage = [.shaderRead, .shaderWrite]
         skyViewLUT = Texture(descriptor: svDesc)
         skyViewLUT.setLabel(name: "Sky View LUT")
@@ -84,7 +97,7 @@ class SkyPass: Pass {
     }
 
     override func render(context: FrameContext) {
-        guard (context.scene != nil) else { return }
+        guard context.scene != nil else { return }
         guard settings.bool("Sky.Enabled", default: true) else { return }
 
         var params = AtmosphereParameters()
@@ -144,5 +157,7 @@ class SkyPass: Pass {
         context.resources.register(skyCubemap, for: "Sky.Cubemap")
         context.resources.register(transmittanceLUT, for: "Sky.TransmittanceLUT")
         context.sceneBuffer.setSkybox(skyCubemap)
+        
+        context.resources.addCubemapVisualizer(texture: skyCubemap, label: "Sky Cubemap")
     }
 }

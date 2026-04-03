@@ -240,6 +240,10 @@ class RenderPass {
         }
     }
 
+    func setViewport(_ viewport: MTLViewport) {
+        self.encoder.setViewport(viewport)
+    }
+
     func pushMarker(name: String) {
         self.encoder.pushDebugGroup(name)
     }
