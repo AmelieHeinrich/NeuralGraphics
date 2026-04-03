@@ -2,7 +2,7 @@
 
 ![](.github/reg.png)
 ![](.github/ptbistro.png)
-![](.github/pt2.png)
+![](.github/pt.png)
 
 This repository showcases various modern rendering techniques implemented using Metal 4 API, focused on GPU driven rendering, raytracing and neural graphics.
 
