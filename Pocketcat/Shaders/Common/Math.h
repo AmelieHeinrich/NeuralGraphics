@@ -109,4 +109,44 @@ inline float radians(float deg) {
     return deg * (M_PI_F / 180.0f);
 }
 
+inline float safeacos(float x) {
+    return acos(clamp(x, -1.0f, 1.0f));
+}
+
+inline float ray_intersect_sphere(float3 ro, float3 rd, float rad) {
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - rad * rad;
+    if (c > 0.0f && b > 0.0f) return -1.0f;
+    float discr = b*b - c;
+    if (discr < 0.0f) return -1.0f;
+    if (discr > b*b) return (-b + sqrt(discr));
+    return -b - sqrt(discr);
+}
+
+inline float get_mie_phase(float cosTheta) {
+    const float g     = 0.8f;
+    const float scale = 3.0f / (8.0f * M_PI_F);
+    float num   = (1.0f - g*g) * (1.0f + cosTheta*cosTheta);
+    float denom = (2.0f + g*g) * pow(1.0f + g*g - 2.0f*g*cosTheta, 1.5f);
+    return scale * num / denom;
+}
+
+inline float get_rayleigh_phase(float cos_theta) {
+    return (3.0f / (16.0f * M_PI_F)) * (1.0f + cos_theta * cos_theta);
+}
+
+inline float3 cube_face_ray_dir(uint face, float2 uv) {
+    // uv in [-1, 1]
+    float u = uv.x, v = uv.y;
+    switch (face) {
+        case 0: return normalize(float3( 1.0f,  -v,  -u)); // +X
+        case 1: return normalize(float3(-1.0f,  -v,   u)); // -X
+        case 2: return normalize(float3(  u,   1.0f,   v)); // +Y
+        case 3: return normalize(float3(  u,  -1.0f,  -v)); // -Y
+        case 4: return normalize(float3(  u,  -v,   1.0f)); // +Z
+        case 5: return normalize(float3( -u,  -v,  -1.0f)); // -Z
+        default: return float3(0.0f);
+    }
+}
+
 #endif

@@ -179,5 +179,15 @@ extension SceneConfiguration {
                 SceneModelDescriptor(resource: "ShadowTest")
             ])
         ),
+        SceneConfiguration(
+            id: "pbr_spheres",
+            name: "PBR Spheres",
+            systemIcon: "circle.hexagongrid",
+            tags: ["PBR"],
+            group: .showcase,
+            descriptor: SceneDescriptor(models: [
+                SceneModelDescriptor(resource: "PBRSpheres")
+            ])
+        ),
     ]
 }

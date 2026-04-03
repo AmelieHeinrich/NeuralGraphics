@@ -88,13 +88,17 @@ void rt_reflections(texture2d<float, access::read_write> out [[texture(0)]],
         ray.max_distance = 1000;
 
         SurfaceHit bounce = trace_and_get(scene, ray, inter);
-        if (!bounce.hit)
-            continue;
 
-        float3 li = eval_brdf(bounce, -wi, -light_dir)
-                  * visibility(bounce.pos + bounce.n * 0.001, -light_dir, 1000, scene)
-                  * light_color;
-        float3 hit_radiance = bounce.emissive + li;
+        float3 hit_radiance;
+        if (!bounce.hit) {
+            constexpr sampler s(filter::linear);
+            hit_radiance = scene.sky_cubemap.sample(s, wi).rgb;
+        } else {
+            float3 li = eval_brdf(bounce, -wi, -light_dir)
+                      * visibility(bounce.pos + bounce.n * 0.001, -light_dir, 1000, scene)
+                      * light_color;
+            hit_radiance = bounce.emissive + li;
+        }
 
         // Compute IS weight
         float3 weight;

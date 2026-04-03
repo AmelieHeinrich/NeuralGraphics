@@ -71,6 +71,8 @@ void rtgi(texture2d<float, access::read_write> out [[texture(0)]],
 
         SurfaceHit bounce = trace_and_get(scene, ray, inter);
         if (!bounce.hit) {
+            constexpr sampler s(filter::linear);
+            indirect += albedo * scene.sky_cubemap.sample(s, wi).rgb;
             continue;
         }
         float3 li = eval_brdf(bounce, -wi, -light_dir) * visibility(bounce.pos + bounce.n * 0.001, -light_dir, 1000, scene) * light_color;

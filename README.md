@@ -1,7 +1,7 @@
 # Pocketcat
 
 ![](.github/reg.png)
-![](.github/pt.png)
+![](.github/ptbistro.png)
 ![](.github/pt2.png)
 
 This repository showcases various modern rendering techniques implemented using Metal 4 API, focused on GPU driven rendering, raytracing and neural graphics.
@@ -19,6 +19,7 @@ The project provides 3 baked meshes by default: cube, cube+sphere, and Crytek Sp
 - GPU driven visibility buffer with mesh shaders
 - MetalFX spatial/temporal upscaling
 - Stochastic reference pathtracer
+- Hillaire sky model
 
 ## WIP
 

@@ -153,6 +153,7 @@ struct scene_data
     uint point_light_count;
     uint _pad_lights2;
     sun_light sun;
+    texturecube<float> sky_cubemap;
 };
 
 struct triangle {

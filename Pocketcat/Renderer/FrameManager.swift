@@ -313,6 +313,8 @@ class FrameManager {
             step: 0.05)
 
         // Initialize passes
+        let skyPass = SkyPass(settings: registry)
+        let skyDrawPass = SkyDrawPass(settings: registry)
         let cullViewPass = CullViewPass(registry: registry)
         let visibilityPass = VisibilityBufferPass(registry: registry)
         let gbufferPass = GBufferPass()
@@ -332,12 +334,14 @@ class FrameManager {
         debug.registry = registry
 
         self.passes = [
-            tlas, cullViewPass, visibilityPass, pathtracer, tonemap, upscaler, debug, gbufferPass,
-            deferred, accumulationDenoiser, rtgi, rtshadows, rtao, rtreflections, texViz,
+            skyPass, skyDrawPass, tlas, cullViewPass, visibilityPass, pathtracer, tonemap, upscaler,
+            debug, gbufferPass, deferred, accumulationDenoiser, rtgi, rtshadows, rtao, rtreflections,
+            texViz,
         ]
 
         // Desktop pipeline
         let desktopTimeline = RenderTimeline()
+        desktopTimeline.addPass(skyPass)
         desktopTimeline.addPass(tlas)
         desktopTimeline.addPass(cullViewPass)
         desktopTimeline.addPass(visibilityPass)
@@ -347,6 +351,7 @@ class FrameManager {
         desktopTimeline.addPass(rtao)
         desktopTimeline.addPass(rtreflections)
         desktopTimeline.addPass(deferred)
+        desktopTimeline.addPass(skyDrawPass)
         desktopTimeline.addPass(tonemap)
         desktopTimeline.addPass(upscaler)
         desktopTimeline.addPass(debug)
@@ -354,12 +359,14 @@ class FrameManager {
 
         // Pathtrace pipeline
         let pathtraceTimeline = RenderTimeline()
+        pathtraceTimeline.addPass(skyPass)
         pathtraceTimeline.addPass(tlas)
         pathtraceTimeline.addPass(cullViewPass)
         pathtraceTimeline.addPass(visibilityPass)
         pathtraceTimeline.addPass(gbufferPass)
         pathtraceTimeline.addPass(pathtracer)
         pathtraceTimeline.addPass(accumulationDenoiser)
+        pathtraceTimeline.addPass(skyDrawPass)
         pathtraceTimeline.addPass(tonemap)
         pathtraceTimeline.addPass(upscaler)
         pathtraceTimeline.addPass(debug)

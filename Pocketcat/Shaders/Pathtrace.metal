@@ -49,7 +49,12 @@ void pathtracer(const device scene_data& scene [[buffer(0)]],
 
     float depth = depth_texture.read(pid).r;
     if (depth >= 1.0) {
-        output.write(0.0, pid);
+        float4 clip4 = float4(ndc, 1.0, 1.0);
+        float4 world4 = scene.camera.inverse_view_projection * clip4;
+        float3 world_pos = world4.xyz / world4.w;
+        float3 ray_dir = normalize(world_pos - scene.camera.position_and_near.xyz);
+        constexpr sampler s(filter::linear);
+        output.write(float4(scene.sky_cubemap.sample(s, ray_dir).rgb, 1.0), pid);
         return;
     }
 
@@ -119,7 +124,11 @@ void pathtracer(const device scene_data& scene [[buffer(0)]],
             next.max_distance = 10000.0;
 
             auto result = inter.intersect(next, scene.tlas, 0xFF, ift);
-            if (result.type == intersection_type::none) break;
+            if (result.type == intersection_type::none) {
+                constexpr sampler s(filter::linear);
+                path_radiance += throughput * scene.sky_cubemap.sample(s, wi).rgb;
+                break;
+            }
 
             float3 hit_pos = hit.pos + wi * result.distance;
             hit = fetch_secondary_hit(scene, result.instance_id, result.primitive_id,

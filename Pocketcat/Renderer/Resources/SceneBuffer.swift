@@ -89,6 +89,7 @@ private struct GPUSceneBufferHeader {
     var pointLightCount: UInt32
     var _padLights2: UInt32
     var sun: GPUSunLight
+    var skyCubemapID: UInt64 = 0
 }
 
 class SceneBufferBuilder {
@@ -424,6 +425,13 @@ class SceneBufferBuilder {
                 plPtr[i] = pointLights[i]
             }
         }
+    }
+
+    /// Updates the sky cubemap handle in the current frame's scene buffer. Call each frame from SkyPass.
+    func setSkybox(_ texture: Texture?) {
+        guard let buf = buffer else { return }
+        let ptr = buf.contents().bindMemory(to: GPUSceneBufferHeader.self, capacity: 1)
+        ptr.pointee.skyCubemapID = texture?.texture.gpuResourceID._impl ?? 0
     }
 
     // MARK: - Private Helpers

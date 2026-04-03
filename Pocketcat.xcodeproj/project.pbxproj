@@ -10,6 +10,9 @@
 		1363D1CE2F7D0CBF00EC1628 /* raw3.tex in Resources */ = {isa = PBXBuildFile; fileRef = 1363D1CB2F7D0CBF00EC1628 /* raw3.tex */; };
 		1363D1CF2F7D0CBF00EC1628 /* ShadowTest.bin in Resources */ = {isa = PBXBuildFile; fileRef = 1363D1CC2F7D0CBF00EC1628 /* ShadowTest.bin */; };
 		136A178A2F5B811700BE5330 /* Buddha.bin in Resources */ = {isa = PBXBuildFile; fileRef = 136A17822F5B811700BE5330 /* Buddha.bin */; };
+		13DCA3832F7FBEC00024D096 /* PBRSpheres.bin in Resources */ = {isa = PBXBuildFile; fileRef = 13DCA37F2F7FBEC00024D096 /* PBRSpheres.bin */; };
+		13DCA3842F7FBEC00024D096 /* Spheres_BaseColor.tex in Resources */ = {isa = PBXBuildFile; fileRef = 13DCA3802F7FBEC00024D096 /* Spheres_BaseColor.tex */; };
+		13DCA3852F7FBEC00024D096 /* Spheres_MetalRough.tex in Resources */ = {isa = PBXBuildFile; fileRef = 13DCA3812F7FBEC00024D096 /* Spheres_MetalRough.tex */; };
 		BA02D9F32F558F09009EBF35 /* 8006627369776289000.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02D9CF2F558F09009EBF35 /* 8006627369776289000.tex */; };
 		BA02D9F42F558F09009EBF35 /* 3628158980083700836.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02D9BA2F558F09009EBF35 /* 3628158980083700836.tex */; };
 		BA02D9F52F558F09009EBF35 /* 7815564343179553343.tex in Resources */ = {isa = PBXBuildFile; fileRef = BA02D9CE2F558F09009EBF35 /* 7815564343179553343.tex */; };
@@ -597,6 +600,9 @@
 		1363D1CB2F7D0CBF00EC1628 /* raw3.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = raw3.tex; sourceTree = "<group>"; };
 		1363D1CC2F7D0CBF00EC1628 /* ShadowTest.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = ShadowTest.bin; sourceTree = "<group>"; };
 		136A17822F5B811700BE5330 /* Buddha.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = Buddha.bin; sourceTree = "<group>"; };
+		13DCA37F2F7FBEC00024D096 /* PBRSpheres.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = PBRSpheres.bin; sourceTree = "<group>"; };
+		13DCA3802F7FBEC00024D096 /* Spheres_BaseColor.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = Spheres_BaseColor.tex; sourceTree = "<group>"; };
+		13DCA3812F7FBEC00024D096 /* Spheres_MetalRough.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = Spheres_MetalRough.tex; sourceTree = "<group>"; };
 		BA02D95A2F557A58009EBF35 /* AssetBaker */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = AssetBaker; sourceTree = BUILT_PRODUCTS_DIR; };
 		BA02D9942F557EB0009EBF35 /* libate.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libate.tbd; path = usr/lib/libate.tbd; sourceTree = SDKROOT; };
 		BA02D9AB2F558F09009EBF35 /* 332936164838540657.tex */ = {isa = PBXFileReference; lastKnownFileType = file; path = 332936164838540657.tex; sourceTree = "<group>"; };
@@ -1231,6 +1237,16 @@
 			path = Buddha;
 			sourceTree = "<group>";
 		};
+		13DCA3822F7FBEC00024D096 /* PBRSpheres */ = {
+			isa = PBXGroup;
+			children = (
+				13DCA37F2F7FBEC00024D096 /* PBRSpheres.bin */,
+				13DCA3802F7FBEC00024D096 /* Spheres_BaseColor.tex */,
+				13DCA3812F7FBEC00024D096 /* Spheres_MetalRough.tex */,
+			);
+			path = PBRSpheres;
+			sourceTree = "<group>";
+		};
 		BA02D9932F557EB0009EBF35 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -1326,6 +1342,7 @@
 		BA02D9F22F558F09009EBF35 /* BakedAssets */ = {
 			isa = PBXGroup;
 			children = (
+				13DCA3822F7FBEC00024D096 /* PBRSpheres */,
 				1363D1CD2F7D0CBF00EC1628 /* ShadowTest */,
 				136EE4CB2F6C2B58004E9246 /* CubeAndSphere */,
 				136A17832F5B811700BE5330 /* Buddha */,
@@ -2427,6 +2444,9 @@
 				BA82ADF62F55C5D60052AFC5 /* Pavement_Cobblestone_Wet_BLENDSHADER_BaseColor.tex in Resources */,
 				BA02DA102F558F09009EBF35 /* 15722799267630235092.tex in Resources */,
 				BA02DA112F558F09009EBF35 /* 9288698199695299068.tex in Resources */,
+				13DCA3832F7FBEC00024D096 /* PBRSpheres.bin in Resources */,
+				13DCA3842F7FBEC00024D096 /* Spheres_BaseColor.tex in Resources */,
+				13DCA3852F7FBEC00024D096 /* Spheres_MetalRough.tex in Resources */,
 				BA02DA122F558F09009EBF35 /* 6047387724914829168.tex in Resources */,
 				BA02DA132F558F09009EBF35 /* 10388182081421875623.tex in Resources */,
 				BA02DA142F558F09009EBF35 /* 7441062115984513793.tex in Resources */,
