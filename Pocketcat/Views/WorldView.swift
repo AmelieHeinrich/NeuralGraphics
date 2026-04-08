@@ -199,6 +199,11 @@ struct WorldView: View {
                 .buttonStyle(.plain)
             }
 
+            if lightState.isSunAnimating {
+                LabeledSlider(label: "Speed", value: $lightState.sunAnimationSpeed, range: 0.1...50.0,
+                              format: "%.1f°/f")
+            }
+
             Picker("Mode", selection: $lightState.sunMode) {
                 ForEach(SunMode.allCases, id: \.self) { mode in
                     Text(mode.rawValue).tag(mode)

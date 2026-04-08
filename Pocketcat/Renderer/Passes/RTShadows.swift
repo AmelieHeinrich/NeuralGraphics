@@ -117,8 +117,7 @@ class RTShadows: Pass {
         ift = tracePipeline.createIFT()
 
         func makeTex(_ fmt: MTLPixelFormat, _ label: String) -> Texture {
-            let desc = MTLTextureDescriptor.texture2DDescriptor(
-                pixelFormat: fmt, width: 1, height: 1, mipmapped: false)
+            let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: fmt, width: 1, height: 1, mipmapped: false)
             desc.usage = [.shaderRead, .shaderWrite]
             let t = Texture(descriptor: desc)
             t.setLabel(name: label)

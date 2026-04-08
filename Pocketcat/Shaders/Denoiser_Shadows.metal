@@ -125,30 +125,6 @@ bool load_prev_data(const device temporal_input& input, int2 frag_coord, float2 
         history_moments = valid ? history_moments / sumw : 0.0f;
     }
 
-    // If bilinear fails, perform a 3x3 cross-bilateral filter fallback to find a valid sample nearby
-    if (!valid) {
-        float cnt = 0.0;
-        for (int yy = -1; yy <= 1; yy++) {
-            for (int xx = -1; xx <= 1; xx++) {
-                int2 p = ipos_prev + int2(xx, yy);
-                uint2 up = uint2(clamp(p, int2(0), size - 1));
-                float history_linear_depth = input.previous_depth.read(up).z;
-                float3 history_normal = input.previous_normals.read(up).rgb;
-
-                if (is_reprojection_valid(ipos_prev, size, depth, history_linear_depth, current_normal, history_normal, input.disocclusion_threshold)) {
-                    history_shadow += input.previous_filtered.read(up).r;
-                    history_moments += input.previous_moments.read(up).rg;
-                    cnt += 1.0;
-                }
-            }
-        }
-        if (cnt > 0) {
-            valid = true;
-            history_shadow /= cnt;
-            history_moments /= cnt;
-        }
-    }
-
     if (valid) {
         history_length = input.history.read(uint2(clamp(ipos_prev, int2(0), size - 1))).r;
     } else {
@@ -193,12 +169,12 @@ void denoise_shadows_temporal(const device temporal_input& input [[buffer(0)]],
     history_length = min(32.0f, success ? history_length + 1.0f : 1.0f);
 
     if (success) {
-        // Compute spatial mean and standard deviation of the current frame in a 3x3 neighborhood
+        // Compute spatial mean and standard deviation of the current frame in a 7x7 neighborhood
         float m1 = 0.0f;
         float m2 = 0.0f;
         float weight = 0.0f;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dy = -1; dy <= 1; dy++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dy = -2; dy <= 2; dy++) {
                 int2 sample_coord = clamp(current_coord + int2(dx, dy), int2(0), int2(width - 1, height - 1));
                 float sample_color = input.shadow_mask.read(uint2(sample_coord)).r;
                 m1 += sample_color;

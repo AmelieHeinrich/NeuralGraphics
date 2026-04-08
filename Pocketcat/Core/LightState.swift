@@ -47,6 +47,7 @@ class LightState: ObservableObject {
     @Published var pointLights: [PointLightEntry] = []
 
     // Sun animation
+    @Published var sunAnimationSpeed: Float = 0.5   // degrees per frame at 60 fps
     @Published var isSunAnimating: Bool = false {
         didSet {
             if isSunAnimating {
@@ -55,7 +56,7 @@ class LightState: ObservableObject {
                     .autoconnect()
                     .sink { [weak self] _ in
                         guard let self else { return }
-                        self.sunAzimuth = (self.sunAzimuth + 0.5).truncatingRemainder(dividingBy: 360)
+                        self.sunAzimuth = (self.sunAzimuth + self.sunAnimationSpeed).truncatingRemainder(dividingBy: 360)
                     }
             } else {
                 animationCancellable = nil
