@@ -125,6 +125,32 @@ bool load_prev_data(const device temporal_input& input, int2 frag_coord, float2 
         history_moments = valid ? history_moments / sumw : 0.0f;
     }
 
+    // Cross-bilateral fallback: when bilinear reprojection fails, search a 3x3
+    // neighborhood for any valid historical sample. Without this, every disoccluded
+    // pixel gets alpha=1 (no accumulation) and carries full noise every frame.
+    if (!valid) {
+        float cnt = 0.0f;
+        for (int yy = -1; yy <= 1; yy++) {
+            for (int xx = -1; xx <= 1; xx++) {
+                int2 p = ipos_prev + int2(xx, yy);
+                if (p.x < 0 || p.y < 0 || p.x >= size.x || p.y >= size.y) continue;
+                uint2 up = uint2(p);
+                float h_depth = input.previous_depth.read(up).z;
+                float3 h_normal = input.previous_normals.read(up).rgb;
+                if (is_reprojection_valid(p, size, depth, h_depth, current_normal, h_normal, input.disocclusion_threshold)) {
+                    history_shadow  += input.previous_filtered.read(up).r;
+                    history_moments += input.previous_moments.read(up).rg;
+                    cnt += 1.0f;
+                }
+            }
+        }
+        if (cnt > 0.0f) {
+            valid = true;
+            history_shadow  /= cnt;
+            history_moments /= cnt;
+        }
+    }
+
     if (valid) {
         history_length = input.history.read(uint2(clamp(ipos_prev, int2(0), size - 1))).r;
     } else {
@@ -167,31 +193,6 @@ void denoise_shadows_temporal(const device temporal_input& input [[buffer(0)]],
 
     // Cap history length to 32 frames otherwise there will be tons of ghosting
     history_length = min(32.0f, success ? history_length + 1.0f : 1.0f);
-
-    if (success) {
-        // Compute spatial mean and standard deviation of the current frame in a 7x7 neighborhood
-        float m1 = 0.0f;
-        float m2 = 0.0f;
-        float weight = 0.0f;
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
-                int2 sample_coord = clamp(current_coord + int2(dx, dy), int2(0), int2(width - 1, height - 1));
-                float sample_color = input.shadow_mask.read(uint2(sample_coord)).r;
-                m1 += sample_color;
-                m2 += sample_color * sample_color;
-                weight += 1.0f;
-            }
-        }
-        float mean = m1 / weight;
-        float variance = (m2 / weight) - (mean * mean);
-        float std_dev = sqrt(max(variance, 0.0f));
-
-        float radiance_min = mean - (input.std_dev_scale * std_dev);
-        float radiance_max = mean + (input.std_dev_scale * std_dev);
-
-        // Clip the history shadow to the current frame's valid local variance range (AABB)
-        history_shadow = clip_aabb(radiance_min, radiance_max, history_shadow);
-    }
 
     float alpha = success ? max(input.alpha, 1.0f / history_length) : 1.0f;
 
@@ -243,9 +244,12 @@ void denoise_shadows_variance_estimation(const device variance_estimation_input&
     float4 out_color = float4(center_color, 0.0f, 0.0f, 0.0f);
 
     if (history_length < 4.0f) {
+        // Center pixel starts with weight 1 via sum_w; color/moments initialized to 0
+        // so the loop accumulates the center pixel once (at xx=0, yy=0) consistently
+        // with all neighbors. Initializing to center_color would double-count it.
         float sum_w = 1.0f;
-        float sum_color = center_color;
-        float2 sum_moments = input.moments.read(gtid).rg;
+        float sum_color = 0.0f;
+        float2 sum_moments = float2(0.0f);
 
         for (int yy = -3; yy <= 3; yy++) {
             for (int xx = -3; xx <= 3; xx++) {
@@ -346,8 +350,8 @@ void denoise_shadows_atrous(const device atrous_input& input [[buffer(0)]],
     float sum_w = 1.0f;
     float2 sum_color_var = center_color_var;
 
-    for (int yy = -1; yy <= 1; yy++) {
-        for (int xx = -1; xx <= 1; xx++) {
+    for (int yy = -2; yy <= 2; yy++) {
+        for (int xx = -2; xx <= 2; xx++) {
             int2 p = ipos + int2(xx, yy) * input.step_size;
             bool inside = p.x >= 0 && p.y >= 0 && p.x < size.x && p.y < size.y;
 
