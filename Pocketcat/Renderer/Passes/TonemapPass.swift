@@ -16,7 +16,7 @@ class TonemapPass: Pass {
 
         self.pipeline = RenderPipeline(descriptor: pipelineDesc)
         self.registry = registry
-        registry.register(float: "Tonemap.Gamma", label: "Gamma", default: 2.2, range: 1.0...3.0)
+        registry.register(float: "Tonemap.Gamma", label: "Gamma", default: 1.4, range: 1.0...3.0)
 
         super.init()
     }

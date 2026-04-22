@@ -20,6 +20,7 @@ To add more meshes, you can add any GLTF model in SourceAssets and run the Asset
 - MetalFX spatial/temporal upscaling
 - Stochastic reference pathtracer
 - Hillaire sky model
+- AgX tonemapping
 
 ## WIP
 
